@@ -94,6 +94,22 @@
   .bigbtn { background: #7b2cbf; padding: 12px 16px; font-weight: 900; font-size: 17px; flex: 1; min-width: 140px; box-shadow: 0 4px 0 #00000066; }
   .bigbtn.green { background: #2a9d8f; } .bigbtn.red { background: #c1121f; } .bigbtn.grey { background: #4a4e69; } .bigbtn.gold { background: #e9a100; color: #1b1033; }
   .bigbtn:disabled { opacity: .4; }
+  .gar { display: flex; gap: 14px; flex-wrap: wrap; align-items: flex-start; }
+  .garPrev { background: #00000044; border-radius: 14px; padding: 10px; text-align: center; flex: 0 0 auto; }
+  .garPrev img { width: 176px; height: 176px; image-rendering: pixelated; display: block; }
+  .garName { font-weight: 900; font-size: 18px; color: #ffd166; margin-top: 4px; max-width: 176px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .garOpts { flex: 1; min-width: 220px; }
+  .garOpts h3 small { font-size: 12px; color: #fff; opacity: .7; }
+  #garNm { font: inherit; font-size: 18px; font-weight: 800; padding: 8px 10px; border-radius: 10px; border: 2px solid #ffffff33; background: #ffffff15; color: #fff; width: 100%; max-width: 260px; box-sizing: border-box; }
+  .swr { display: flex; flex-wrap: wrap; gap: 8px; }
+  .sw { width: 40px; height: 40px; min-width: 0; border-radius: 50%; padding: 0; border: 3px solid #ffffff44; box-shadow: none; }
+  .sw.on { border-color: #fff; box-shadow: 0 0 0 3px #ffd166; }
+  .sw:disabled { opacity: .3; }
+  .gopts { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; }
+  .gopt { background: #ffffff12; border: 3px solid transparent; border-radius: 12px; padding: 6px 4px; display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 13px; font-weight: 800; line-height: 1.15; min-width: 0; box-shadow: none; }
+  .gopt img { width: 56px; height: 56px; image-rendering: pixelated; }
+  .gopt.on { border-color: #ffd166; background: #ffd16622; }
+  .gopt.lk { opacity: 1; } .gopt.lk img { filter: grayscale(1) brightness(.45); } .gopt.lk span { color: #ffffffaa; font-weight: 700; }
   .tool { display: flex; align-items: center; gap: 10px; background: #ffffff10; border-radius: 12px; padding: 7px 10px; margin-top: 6px; }
   .tool .ic { font-size: 26px; } .tool .tx { flex: 1; font-size: 14px; line-height: 1.3; } .tool b { font-size: 15px; }
   .tool button { background: #2a9d8f; padding: 9px 11px; font-weight: 800; font-size: 14px; white-space: nowrap; }
@@ -136,7 +152,7 @@
 <div id="tr">
   <canvas id="mm" width="150" height="150"></canvas>
   <div id="trb">
-    <button class="sbtn" id="btnJour">📜</button><button class="sbtn" id="btnMap">🗺️</button><button class="sbtn" id="btnPause">⏸</button>
+    <button class="sbtn" id="btnGar" title="Garage du robot">🤖</button><button class="sbtn" id="btnJour">📜</button><button class="sbtn" id="btnMap">🗺️</button><button class="sbtn" id="btnPause">⏸</button>
     <button class="sbtn" id="btnSnd">🔊</button>
   </div>
 </div>
@@ -153,7 +169,7 @@
 </div>
 <div id="modal" class="ov hidden"><div class="box" id="modalBox"></div></div>
 <div id="title" class="ov">
-  <canvas id="titleRobot" width="14" height="14"></canvas>
+  <canvas id="titleRobot" width="16" height="16"></canvas>
   <h1>BASE SPATIALE</h1>
   <div class="sub">Petit robot pilote · planète inconnue · retrouve ton équipage et rentre chez toi</div>
   <div class="row">
@@ -426,13 +442,6 @@ function mk(w, h, fn) { const c = document.createElement('canvas'); c.width = w;
 function px(g, col, x, y, w = 1, h = 1) { g.fillStyle = col; g.fillRect(x, y, w, h); }
 function circ(g, cx, cy, r, col) { g.fillStyle = col; for (let y = -r; y <= r; y++) for (let x = -r; x <= r; x++) if (x * x + y * y <= r * r + r * .6) g.fillRect(Math.round(cx + x), Math.round(cy + y), 1, 1); }
 function ring(g, cx, cy, r, col) { g.fillStyle = col; for (let a = 0; a < 6.283; a += .5 / r) g.fillRect(Math.round(cx + Math.cos(a) * r), Math.round(cy + Math.sin(a) * r), 1, 1); }
-function drawRobot(g) {
-  px(g, '#2b2d42', 1, 2, 3, 11); px(g, '#2b2d42', 10, 2, 3, 11);
-  for (let y = 3; y < 13; y += 2) { px(g, '#8d99ae', 1, y, 3, 1); px(g, '#8d99ae', 10, y, 3, 1); }
-  px(g, '#b5651d', 4, 3, 6, 10); px(g, '#f4a300', 4, 3, 6, 9); px(g, '#ffd166', 5, 5, 4, 2);
-  px(g, '#1d3557', 4, 1, 6, 4); px(g, '#4cc9f0', 5, 2, 4, 2); px(g, '#ffffff', 5, 2, 1, 1);
-  px(g, '#e63946', 6, 10, 2, 2); px(g, '#6c757d', 3, 6, 1, 3); px(g, '#6c757d', 10, 6, 1, 3);
-}
 const SPR = {};
 function bug(g, s, body, light, eye, legs) {
   const c = s / 2;
@@ -440,8 +449,8 @@ function bug(g, s, body, light, eye, legs) {
   circ(g, c, c, c - 2, body); circ(g, c, c, c - 3, light); px(g, eye, c - 2, 2, 1, 1); px(g, eye, c + 1, 2, 1, 1);
 }
 function buildSprites() {
-  SPR.robot = mk(14, 14, drawRobot);
-  drawRobot($('titleRobot').getContext('2d'));
+  SPR.robot = mk(16, 16, g => drawRobotLook(g, defLook(), 1));
+  drawRobotLook($('titleRobot').getContext('2d'), defLook(), 1);
   SPR.crawler = mk(12, 12, g => { bug(g, 12, '#2d6a4f', '#52b788', '#ff0054', '#1b4332'); px(g, '#95d5b2', 5, 4, 2, 3); px(g, '#1b4332', 4, 0, 1, 2); px(g, '#1b4332', 7, 0, 1, 2); });
   SPR.drone = mk(12, 12, g => {
     circ(g, 2, 2, 2, '#9d4edd88'); circ(g, 9, 2, 2, '#9d4edd88'); circ(g, 2, 9, 2, '#9d4edd88'); circ(g, 9, 9, 2, '#9d4edd88');
@@ -705,7 +714,7 @@ function newStats() { return { moved: 0, got: zeroRes(), made: zeroRes(), kills:
 function freshG(seed) {
   return { v: 2, seed, res: zeroRes(), seen: { m: 1, c: 1, g: 1, f: 1 }, day: 1, t: 15, baseE: 50, tools: {}, stats: newStats(), mi: 0, ms: null, side: [],
     research: { done: {}, cur: null }, surv: [], known: {}, pd: {}, nestHp: {}, ant: 0, stage: 0, rover: null, flags: {},
-    explored: new Uint8Array(EW * EW), mods: [], toSpawn: 0, spawnT: 0, nightStarted: false, wave: null, nextQueen: 0, ev: null, evDay: 0, extra: [], lostMods: 0 };
+    explored: new Uint8Array(EW * EW), mods: [], toSpawn: 0, spawnT: 0, nightStarted: false, wave: null, nextQueen: 0, ev: null, evDay: 0, extra: [], lostMods: 0, look: defLook() };
 }
 function hasTech(id) { return !id || !!G.research.done[id]; }
 function count(type) { let n = 0; for (const m of G.mods) if (m.type === type) n++; return n; }
@@ -771,7 +780,7 @@ function saveGame() {
     const rocks = []; if (W.minedMark) for (let i = 0; i < W.minedMark.length; i++) if (W.minedMark[i]) rocks.push(i);
     let exp = ''; for (let i = 0; i < G.explored.length; i++) exp += G.explored[i] ? '1' : '0';
     const data = { v: 2, seed: G.seed, res: G.res, seen: G.seen, day: G.day, t: Math.round(G.t * 10) / 10, baseE: Math.round(G.baseE), tools: G.tools, stats: G.stats, mi: G.mi, ms: G.ms, side: G.side,
-      research: G.research, surv: G.surv, known: G.known, pd: G.pd, nestHp: G.nestHp, ant: G.ant, stage: G.stage, rover: G.rover, flags: G.flags, nextQueen: G.nextQueen, evDay: G.evDay, extra: G.extra, lostMods: G.lostMods,
+      research: G.research, surv: G.surv, known: G.known, pd: G.pd, nestHp: G.nestHp, ant: G.ant, stage: G.stage, rover: G.rover, flags: G.flags, nextQueen: G.nextQueen, evDay: G.evDay, extra: G.extra, lostMods: G.lostMods, look: G.look,
       p: { x: Math.round(P.x), y: Math.round(P.y), hp: Math.round(P.hp), en: Math.round(P.en), o2: Math.round(P.o2), inRover: P.inRover },
       mods: G.mods.map(m => [m.type, m.cx, m.cy, m.lvl, Math.round(m.hp), Math.round(m.buf || 0), m.rec || 0]),
       nodes: W.nodes.map(n => n.a), rocks, exp };
@@ -794,6 +803,7 @@ function loadGame() {
     G.res = Object.assign(zeroRes(), d.res); G.seen = Object.assign(G.seen, d.seen); G.stats = Object.assign(newStats(), d.stats);
     for (const k of ['got', 'made']) G.stats[k] = Object.assign(zeroRes(), G.stats[k]);
     G.research = Object.assign({ done: {}, cur: null }, d.research);
+    G.look = fixLook(d.look);
     if (d.exp) for (let i = 0; i < G.explored.length; i++) G.explored[i] = d.exp.charCodeAt(i) === 49 ? 1 : 0;
     G.nightStarted = G.t >= DAY_LEN;
     resetRuntime();
@@ -1199,12 +1209,14 @@ function openModPanel(m) {
   if (m.type === 'rocket' && G.stage >= STAGES.length && !G.flags.launch) h += `<button class="bigbtn gold" id="mLaunch" ${G.surv.includes('lina') ? '' : 'disabled'}>🚀 LANCER LE COMPTE À REBOURS</button>`;
   if (m.lvl < d.max) { const c = upCost(m); h += `<button class="bigbtn green" id="mUp" ${canPay(c) ? '' : 'disabled'}>⬆ Niveau ${m.lvl + 1} : ${costHTML(c)}</button>`; }
   if (m.hp < m.maxHp) { const c = Math.ceil((m.maxHp - m.hp) / 25); h += `<button class="bigbtn" id="mFix">🔧 Réparer 🪨${c}</button>`; }
+  if (m.type === 'core') h += `<button class="bigbtn" id="mGar">🤖 Garage du robot</button>`;
   if (m.type !== 'core') h += `<button class="bigbtn" id="mMove">↔ Déplacer</button>`;
   if (m.type !== 'core' && m.type !== 'rocket') h += `<button class="bigbtn red" id="mDel">♻ Démonter</button>`;
   h += `<button class="bigbtn grey" id="mClose">Fermer</button></div>`;
   openModal(h, m.type === 'lab' || m.type === 'workshop');
   const box = $('modalBox'), re = () => openModPanel(m);
   box.querySelector('#mClose').onclick = closeModal;
+  const ga = box.querySelector('#mGar'); if (ga) ga.onclick = () => { closeModal(); openGarage(); };
   const mv = box.querySelector('#mMove'); if (mv) mv.onclick = () => { closeModal(); startMove(m); };
   const up = box.querySelector('#mUp'); if (up) up.onclick = () => { const c = upCost(m); if (!canPay(c)) return; pay(c); m.lvl++; const r = m.hp / m.maxHp; m.maxHp = Math.round(MODS[m.type].hp * (1 + .6 * (m.lvl - 1))); m.hp = Math.min(m.maxHp, m.maxHp * r + 30); SFX.build(); part(m.x, m.y, '#7ae7ff', 20, 50, .7); toast(d.ic + ' ' + d.n + ' niveau ' + m.lvl + ' !'); saveGame(); checkMissionSoon(); re(); };
   const del = box.querySelector('#mDel'); if (del) del.onclick = () => {
@@ -1278,6 +1290,98 @@ function openMap() {
   const tg = missionTarget(); if (tg) g.fillText('🎯', tg.x / TS, tg.y / TS - 6);
   g.fillStyle = '#ffd166'; g.fillRect((P.x / TS | 0) - 3, (P.y / TS | 0) - 3, 6, 6);
 }
+
+// ---------- Garage du robot (personnalisation) ----------
+const BODY_COLS = [['Orange', '#f4a300'], ['Rouge', '#e63946'], ['Bleu', '#3a86ff'], ['Vert', '#52b788'], ['Violet', '#9d4edd'], ['Blanc', '#e9ecef'], ['Noir', '#3c3f58'], ['Rose', '#ff70a6']];
+const LIGHT_COLS = [['Cyan', '#4cc9f0'], ['Vert', '#80ffaa'], ['Rouge', '#ff0054'], ['Jaune', '#ffd166'], ['Rose', '#ff8fd8'], ['Blanc', '#ffffff'], ['Violet', '#c77dff'], ['Orange', '#ff9f1c']];
+const HEADS = ['Dôme', 'Carré', 'Antennes', 'Cyclope', 'Crête'];
+const MOBS = [['Chenilles', '🛞'], ['Roues', '⚙️'], ['Jambes', '🦿'], ['Propulseurs', '🔥']];
+const WPN_LOOK = [null, ['Blaster', '#adb5bd', '#6c757d', 1], ['Pistolet laser', '#4cc9f0', '#1d3557', 1], ['Canon plasma', '#c77dff', '#5a189a', 2], ['Fusil xéno', '#ffd166', '#b5651d', 2]];
+function chDone(ci) { return G.mi >= MISSIONS.length || (MISSIONS[G.mi] && MISSIONS[G.mi].ch > ci); }
+const SKINS = [
+  { id: 'queen', n: 'Écailles de sable', lock: 'Bats la Reine des sables', ok: () => G.stats.bosses.queen, b: '#e9c46a', d: '#8a5a2b', h: '#fff1c1', l: '#ff0054', pat: g => { px(g, '#a0522d', 5, 7, 6, 1); px(g, '#a0522d', 5, 10, 6, 1); } },
+  { id: 'golem', n: 'Cœur de magma', lock: 'Bats le Golem de magma', ok: () => G.stats.bosses.golem, b: '#4a2c2a', d: '#1e0f0e', h: '#7a4a3a', l: '#ff9f1c', pat: g => { px(g, '#ff6d00', 6, 6, 1, 3); px(g, '#ff6d00', 7, 8, 2, 1); px(g, '#ffd166', 9, 9, 1, 3); } },
+  { id: 'mantis', n: 'Armure de cristal', lock: 'Bats la Mante de cristal', ok: () => G.stats.bosses.mantis, b: '#90e0ef', d: '#0077b6', h: '#ffffff', l: '#c77dff', pat: g => { px(g, '#ffffff', 6, 7, 1, 1); px(g, '#ffffff', 7, 8, 1, 1); px(g, '#caf0f8', 9, 10, 2, 1); } },
+  { id: 'titan', n: 'Acier du Titan', lock: 'Bats le Titan du cratère', ok: () => G.stats.bosses.titan, b: '#6c757d', d: '#212529', h: '#ced4da', l: '#ff0054', pat: g => { px(g, '#e63946', 5, 8, 6, 1); px(g, '#ced4da', 7, 6, 2, 1); } },
+  { id: 'ch0', n: 'Pionnier', lock: 'Finis le chapitre 1', ok: () => chDone(0), b: '#2a9d8f', d: '#14524b', h: '#a8e6cf', l: '#ffd166', pat: g => px(g, '#ffd166', 7, 8, 2, 2) },
+  { id: 'ch1', n: 'Éclaireur', lock: 'Finis le chapitre 2', ok: () => chDone(1), b: '#f77f00', d: '#7f3f00', h: '#fcbf49', l: '#ffffff', pat: g => { px(g, '#ffffff', 5, 6, 1, 6); px(g, '#ffffff', 10, 6, 1, 6); } },
+  { id: 'ch2', n: 'Radio-ondes', lock: 'Finis le chapitre 3', ok: () => chDone(2), b: '#3a0ca3', d: '#1b0552', h: '#7209b7', l: '#4cc9f0', pat: g => { px(g, '#4cc9f0', 6, 7, 4, 1); px(g, '#4cc9f0', 7, 9, 2, 1); } },
+  { id: 'ch3', n: 'Gardien ancien', lock: 'Finis le chapitre 4', ok: () => chDone(3), b: '#606c38', d: '#283618', h: '#dda15e', l: '#80ffaa', pat: g => { px(g, '#dda15e', 6, 6, 4, 1); px(g, '#dda15e', 6, 11, 4, 1); px(g, '#dda15e', 7, 8, 2, 2); } },
+  { id: 'ch4', n: 'Retour à la maison', lock: 'Finis le chapitre 5', ok: () => chDone(4), b: '#f1faee', d: '#1d3557', h: '#ffffff', l: '#e63946', pat: g => { px(g, '#e63946', 5, 9, 6, 1); px(g, '#457b9d', 5, 10, 6, 1); } },
+  { id: 'hero', n: 'Héros doré', lock: 'Sauve les 5 survivants', ok: () => G.surv.length >= 5, b: '#ffd166', d: '#9c6b00', h: '#fff3b0', l: '#ffffff', pat: g => { px(g, '#ffffff', 7, 7, 2, 1); px(g, '#ffffff', 6, 8, 4, 1); px(g, '#ffffff', 7, 9, 2, 1); } },
+];
+function defLook() { return { body: 0, light: 0, head: 0, mob: 0, skin: null, name: 'R-01' }; }
+function curLook() { if (!G) return defLook(); if (!G.look) G.look = defLook(); return G.look; }
+function wpnTier() { const t = G && G.tools || {}; return t.gun4 ? 4 : t.gun3 ? 3 : t.gun2 ? 2 : 1; }
+function shade(hex, f) { const n = parseInt(hex.slice(1, 7), 16); let r = n >> 16, gg = n >> 8 & 255, b = n & 255; const m = c => Math.max(0, Math.min(255, Math.round(f < 0 ? c * (1 + f) : c + (255 - c) * f))); return '#' + [m(r), m(gg), m(b)].map(v => v.toString(16).padStart(2, '0')).join(''); }
+// Robot vu de dessus, 16×16, l'avant est en haut
+function drawRobotLook(g, L, tier) {
+  const sk = L.skin ? SKINS.find(s => s.id === L.skin) : null;
+  const B = sk ? sk.b : BODY_COLS[L.body][1], D = sk ? sk.d : shade(B, -.55), H = sk ? sk.h : shade(B, .45);
+  const LI = sk && L.light === 0 ? sk.l : LIGHT_COLS[L.light][1];
+  const K = '#1b1b2f', M = '#8d99ae';
+  // mobilité
+  if (L.mob === 0) { px(g, K, 1, 3, 3, 12); px(g, K, 12, 3, 3, 12); for (let y = 4; y < 15; y += 2) { px(g, M, 1, y, 3, 1); px(g, M, 12, y, 3, 1); } }
+  else if (L.mob === 1) { for (const [x, y] of [[1, 3], [12, 3], [1, 10], [12, 10]]) { px(g, K, x, y, 3, 4); px(g, M, x + 1, y + 1, 1, 2); } px(g, M, 3, 5, 1, 1); px(g, M, 12, 5, 1, 1); px(g, M, 3, 12, 1, 1); px(g, M, 12, 12, 1, 1); }
+  else if (L.mob === 2) { for (const y of [4, 8, 12]) { px(g, K, 2, y, 2, 1); px(g, K, 1, y + 1, 1, 2); px(g, K, 12, y, 2, 1); px(g, K, 14, y + 1, 1, 2); px(g, M, 3, y, 1, 1); px(g, M, 12, y, 1, 1); } }
+  else { px(g, K, 4, 13, 3, 2); px(g, K, 9, 13, 3, 2); px(g, LI, 5, 15, 1, 1); px(g, LI, 10, 15, 1, 1); px(g, '#ff9f1c', 4, 15, 1, 1); px(g, '#ff9f1c', 11, 15, 1, 1); px(g, D, 3, 5, 1, 6); px(g, D, 12, 5, 1, 6); }
+  // carrosserie (contour sombre + couleur + reflet)
+  px(g, D, 3, 4, 10, 10); px(g, B, 4, 4, 8, 9); px(g, H, 5, 5, 3, 1); px(g, H, 4, 5, 1, 3);
+  if (sk) sk.pat(g); else px(g, LI, 7, 10, 2, 2);
+  px(g, LI, 4, 12, 1, 1); px(g, LI, 11, 12, 1, 1);
+  // tête
+  const hd = sk ? sk.d : '#1d3557';
+  if (L.head === 0) { px(g, hd, 5, 1, 6, 4); px(g, hd, 6, 0, 4, 1); px(g, LI, 6, 2, 4, 2); px(g, '#ffffff', 6, 2, 1, 1); }
+  else if (L.head === 1) { px(g, hd, 4, 1, 8, 4); px(g, LI, 5, 2, 2, 1); px(g, LI, 9, 2, 2, 1); px(g, M, 7, 0, 2, 1); }
+  else if (L.head === 2) { px(g, hd, 5, 2, 6, 3); px(g, M, 5, 0, 1, 2); px(g, M, 10, 0, 1, 2); px(g, LI, 5, 0, 1, 1); px(g, LI, 10, 0, 1, 1); px(g, LI, 6, 3, 4, 1); }
+  else if (L.head === 3) { px(g, hd, 5, 1, 6, 4); px(g, hd, 6, 0, 4, 1); px(g, '#ffffff', 7, 1, 2, 3); px(g, LI, 7, 2, 2, 2); }
+  else { px(g, hd, 5, 2, 6, 3); px(g, LI, 7, 0, 2, 3); px(g, '#ffffff', 7, 0, 1, 1); px(g, LI, 5, 3, 1, 1); px(g, LI, 10, 3, 1, 1); }
+  // arme (selon l'arme équipée)
+  const w = WPN_LOOK[tier || 1];
+  px(g, w[2], 12, 5, 2, 3); px(g, w[1], 13 - (w[3] - 1), 0, w[3], 6); px(g, '#ffffff', 13, 0, 1, 1);
+}
+function drawRobot(g) { g.clearRect(0, 0, 16, 16); drawRobotLook(g, G ? curLook() : defLook(), G ? wpnTier() : 1); }
+let robotKey = '';
+function robotSprite() {
+  const L = curLook(), k = JSON.stringify(L) + wpnTier();
+  if (k !== robotKey) { robotKey = k; SPR.robot = mk(16, 16, g => drawRobotLook(g, L, wpnTier())); const t = $('titleRobot'); if (t) drawRobot(t.getContext('2d')); }
+  return SPR.robot;
+}
+function lookURL(L, tier) { return mk(16, 16, g => drawRobotLook(g, L, tier)).toDataURL(); }
+function openGarage() {
+  if (!started || !G || G.over) return;
+  const L = curLook(), tier = wpnTier(), box = $('modalBox'), keep = $('modal').classList.contains('hidden') ? 0 : box.scrollTop;
+  let h = `<h2>🤖 Garage du robot</h2><div class="gar">`;
+  h += `<div class="garPrev"><img src="${lookURL(L, tier)}" alt="robot"><div class="garName">${esc(L.name)}</div></div><div class="garOpts">`;
+  h += `<h3>Nom / numéro</h3><input id="garNm" maxlength="12" value="${esc(L.name)}" autocomplete="off">`;
+  const sw = (key, cols, dis) => cols.map((c, i) => `<button class="sw${L[key] === i ? ' on' : ''}" data-${key}="${i}" style="background:${c[1]}" title="${c[0]}" ${dis ? 'disabled' : ''}></button>`).join('');
+  h += `<h3>Carrosserie${L.skin ? ' <small>(skin spécial actif)</small>' : ''}</h3><div class="swr">${sw('body', BODY_COLS, !!L.skin)}</div>`;
+  h += `<h3>Lumières</h3><div class="swr">${sw('light', LIGHT_COLS)}</div></div></div>`;
+  const opt = (key, i, label) => `<button class="gopt${L[key] === i ? ' on' : ''}" data-${key}="${i}"><img src="${lookURL(Object.assign({}, L, { [key]: i }), tier)}"><span>${label}</span></button>`;
+  h += `<h3>Casque</h3><div class="gopts">${HEADS.map((n, i) => opt('head', i, n)).join('')}</div>`;
+  h += `<h3>Mobilité</h3><div class="gopts">${MOBS.map((m, i) => opt('mob', i, m[1] + ' ' + m[0])).join('')}</div>`;
+  h += `<p style="font-size:14px;opacity:.8">🔫 Arme visible : <b>${WPN_LOOK[tier][0]}</b> — elle change toute seule quand tu fabriques une meilleure arme à l'atelier.</p>`;
+  h += `<h3>Skins spéciaux</h3><div class="gopts"><button class="gopt${L.skin ? '' : ' on'}" data-skin=""><img src="${lookURL(Object.assign({}, L, { skin: null }), tier)}"><span>Aucun</span></button>`;
+  for (const s of SKINS) {
+    const ok = !!s.ok();
+    h += `<button class="gopt${L.skin === s.id ? ' on' : ''}${ok ? '' : ' lk'}" data-skin="${s.id}" ${ok ? '' : 'disabled'}><img src="${lookURL(Object.assign({}, L, { skin: s.id }), tier)}"><span>${ok ? s.n : '🔒 ' + s.lock}</span></button>`;
+  }
+  h += `</div><div class="row"><button class="bigbtn grey" id="mClose">Fermer</button></div>`;
+  openModal(h, true); box.scrollTop = keep;
+  $('mClose').onclick = closeModal;
+  const set = (k, v) => { L[k] = v; SFX.beep(); saveGame(); openGarage(); };
+  box.querySelectorAll('[data-body]').forEach(b => b.onclick = () => set('body', +b.dataset.body));
+  box.querySelectorAll('[data-light]').forEach(b => b.onclick = () => set('light', +b.dataset.light));
+  box.querySelectorAll('[data-head]').forEach(b => b.onclick = () => set('head', +b.dataset.head));
+  box.querySelectorAll('[data-mob]').forEach(b => b.onclick = () => set('mob', +b.dataset.mob));
+  box.querySelectorAll('[data-skin]').forEach(b => b.onclick = () => set('skin', b.dataset.skin || null));
+  const nm = $('garNm');
+  nm.onkeydown = e => { e.stopPropagation(); if (e.key === 'Enter') nm.blur(); };
+  nm.onkeyup = e => e.stopPropagation();
+  nm.onchange = () => { L.name = nm.value.trim().slice(0, 12) || 'R-01'; saveGame(); openGarage(); };
+}
+function esc(s) { return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+function fixLook(o) { const L = Object.assign(defLook(), o || {}); const ok = (v, n) => Number.isInteger(v) && v >= 0 && v < n; if (!ok(L.body, 8)) L.body = 0; if (!ok(L.light, 8)) L.light = 0; if (!ok(L.head, HEADS.length)) L.head = 0; if (!ok(L.mob, MOBS.length)) L.mob = 0; if (L.skin && !SKINS.some(s => s.id === L.skin)) L.skin = null; L.name = String(L.name || 'R-01').slice(0, 12); return L; }
 
 // ---------- Missions ----------
 const CHAPTERS = [
@@ -2201,7 +2305,7 @@ function render() {
     if (P.inRover) drawRover(P.x + ox, P.y + oy, P.ang);
     else if (!(P.inv > 0 && frame % 6 < 3 && P.hp < maxHp())) {
       ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.fillRect(P.x + ox - 6, P.y + oy - 4, 13, 11);
-      ctx.save(); ctx.translate(Math.round(P.x + ox), Math.round(P.y + oy)); ctx.rotate(P.ang + Math.PI / 2); ctx.drawImage(SPR.robot, -7, -7); ctx.restore();
+      ctx.save(); ctx.translate(Math.round(P.x + ox), Math.round(P.y + oy)); ctx.rotate(P.ang + Math.PI / 2); ctx.drawImage(robotSprite(), -8, -8); ctx.restore();
       if (P.chill > 0) { ctx.fillStyle = 'rgba(168,218,220,.5)'; ctx.fillRect(P.x + ox - 7, P.y + oy - 7, 14, 14); }
     }
   }
@@ -2388,6 +2492,7 @@ function updateHUD() {
   if (buildMode) refreshBuildBar();
 }
 $('obj').addEventListener('click', () => { if (!paused) openJournal(); });
+$('btnGar').onclick = () => { initAudio(); if (!paused) openGarage(); };
 $('btnJour').onclick = () => { initAudio(); if (!paused) openJournal(); };
 $('btnMap').onclick = () => { initAudio(); if (!paused) openMap(); };
 
