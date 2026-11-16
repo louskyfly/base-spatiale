@@ -657,6 +657,7 @@ function genWorld(seed) {
     const [x, y] = findSpot(-1, 50 + (k % 6) * 22, 80 + (k % 6) * 22, 13); clearAt(x, y, 2);
     const tier = tierOfD(distC(x, y)); addPoi('nest', 'n' + k, x, y, { tier, hp: 60 * (1 + tier) });
   }
+  addCaveEntrances(seed);
 }
 // ----- morceaux de carte en cache (on ne dessine que ce qui est visible) -----
 const chunkCache = new Map();
@@ -725,11 +726,11 @@ let enemies = [], bullets = [], parts = [], floaters = [], shells = [], arcs = [
 let cam = { x: 0, y: 0 }, shake = 0, buildMode = false, buildSel = null, buildCat = 'en', paused = true, started = false;
 const rockHits = new Map();
 const zeroRes = () => { const r = {}; for (const k of RES_ORDER) r[k] = 0; return r; };
-function newStats() { return { moved: 0, got: zeroRes(), made: zeroRes(), kills: 0, killsBy: {}, nests: 0, wrecks: 0, ruins: 0, bosses: {}, biomes: {}, crafted: 0, sideDone: 0, nightsClean: 0 }; }
+function newStats() { return { moved: 0, got: zeroRes(), made: zeroRes(), kills: 0, killsBy: {}, nests: 0, wrecks: 0, ruins: 0, bosses: {}, biomes: {}, crafted: 0, sideDone: 0, nightsClean: 0, caves: 0, chests: 0 }; }
 function freshG(seed) {
   return { v: 2, seed, res: zeroRes(), seen: { m: 1, c: 1, g: 1, f: 1 }, day: 1, t: 15, baseE: 50, tools: {}, stats: newStats(), mi: 0, ms: null, side: [],
     research: { done: {}, cur: null }, surv: [], known: {}, pd: {}, nestHp: {}, ant: 0, stage: 0, rover: null, flags: {},
-    explored: new Uint8Array(EW * EW), mods: [], toSpawn: 0, spawnT: 0, nightStarted: false, wave: null, nextQueen: 0, ev: null, evDay: 0, extra: [], lostMods: 0, look: defLook(), allies: [], aord: defAord() };
+    explored: new Uint8Array(EW * EW), mods: [], toSpawn: 0, spawnT: 0, nightStarted: false, wave: null, nextQueen: 0, ev: null, evDay: 0, extra: [], lostMods: 0, look: defLook(), allies: [], aord: defAord(), caves: {} };
 }
 function hasTech(id) { return !id || !!G.research.done[id]; }
 function count(type) { let n = 0; for (const m of G.mods) if (m.type === type) n++; return n; }
@@ -786,20 +787,22 @@ function newGame() {
   Object.assign(P, { x: CORE_X, y: CORE_Y + 34, hp: 100, en: 100, o2: 100, dead: false, inv: 0, ang: -Math.PI / 2, inRover: false, chill: 0 });
   initFog(); startMission(); genSide(); saveGame();
 }
-function resetRuntime() { modAt.clear(); enemies = []; bullets = []; parts = []; floaters = []; shells = []; arcs = []; flames = []; meteors = []; rockHits.clear(); rdrones = []; tdrones = []; }
+function resetRuntime() { UG = null; modAt.clear(); enemies = []; bullets = []; parts = []; floaters = []; shells = []; arcs = []; flames = []; meteors = []; rockHits.clear(); rdrones = []; tdrones = []; }
 
 // ---------- Sauvegarde ----------
 function saveGame() {
   if (!G || G.over || G.demo) return;
   try {
-    const rocks = []; if (W.minedMark) for (let i = 0; i < W.minedMark.length; i++) if (W.minedMark[i]) rocks.push(i);
+    const SW = UG ? UG.sw : W, sp = UG ? UG.sp : P;
+    if (UG) caveSt(UG.id).n = W.nodes.map(n => n.a);
+    const rocks = []; if (SW.minedMark) for (let i = 0; i < SW.minedMark.length; i++) if (SW.minedMark[i]) rocks.push(i);
     let exp = ''; for (let i = 0; i < G.explored.length; i++) exp += G.explored[i] ? '1' : '0';
     const data = { v: 2, seed: G.seed, res: G.res, seen: G.seen, day: G.day, t: Math.round(G.t * 10) / 10, baseE: Math.round(G.baseE), tools: G.tools, stats: G.stats, mi: G.mi, ms: G.ms, side: G.side,
-      research: G.research, surv: G.surv, known: G.known, pd: G.pd, nestHp: G.nestHp, ant: G.ant, stage: G.stage, rover: G.rover, flags: G.flags, nextQueen: G.nextQueen, evDay: G.evDay, extra: G.extra, lostMods: G.lostMods, look: G.look, mv: 2, aord: G.aord,
-      allies: (G.allies || []).map(a => [a.k, Math.round(a.x), Math.round(a.y), Math.round(a.hp)]),
-      p: { x: Math.round(P.x), y: Math.round(P.y), hp: Math.round(P.hp), en: Math.round(P.en), o2: Math.round(P.o2), inRover: P.inRover },
+      research: G.research, surv: G.surv, known: G.known, pd: G.pd, nestHp: G.nestHp, ant: G.ant, stage: G.stage, rover: G.rover, flags: G.flags, nextQueen: G.nextQueen, evDay: G.evDay, extra: G.extra, lostMods: G.lostMods, look: G.look, mv: 3, aord: G.aord, caves: G.caves,
+      allies: (G.allies || []).map(a => [a.k, Math.round(a.ug && UG ? sp.x : a.x), Math.round(a.ug && UG ? sp.y : a.y), Math.round(a.hp)]),
+      p: { x: Math.round(sp.x), y: Math.round(sp.y), hp: Math.round(P.hp), en: Math.round(P.en), o2: Math.round(P.o2), inRover: P.inRover },
       mods: G.mods.map(m => [m.type, m.cx, m.cy, m.lvl, Math.round(m.hp), Math.round(m.buf || 0), m.rec || 0]),
-      nodes: W.nodes.map(n => n.a), rocks, exp };
+      nodes: SW.nodes.map(n => n.a), rocks, exp };
     localStorage.setItem(SAVE_KEY, JSON.stringify(data));
   } catch (e) { }
 }
@@ -815,7 +818,7 @@ function loadGame() {
   try {
     genWorld(d.seed); applyWorldState(d); buildMapCanvas();
     G = freshG(d.seed);
-    for (const k of ['day', 't', 'baseE', 'tools', 'mi', 'ms', 'side', 'surv', 'known', 'pd', 'nestHp', 'ant', 'stage', 'rover', 'flags', 'nextQueen', 'evDay', 'extra', 'lostMods']) if (d[k] != null) G[k] = d[k];
+    for (const k of ['day', 't', 'baseE', 'tools', 'mi', 'ms', 'side', 'surv', 'known', 'pd', 'nestHp', 'ant', 'stage', 'rover', 'flags', 'nextQueen', 'evDay', 'extra', 'lostMods', 'caves']) if (d[k] != null) G[k] = d[k];
     G.res = Object.assign(zeroRes(), d.res); G.seen = Object.assign(G.seen, d.seen); G.stats = Object.assign(newStats(), d.stats);
     for (const k of ['got', 'made']) G.stats[k] = Object.assign(zeroRes(), G.stats[k]);
     G.research = Object.assign({ done: {}, cur: null }, d.research);
@@ -827,6 +830,8 @@ function loadGame() {
     if (!core()) addMod('core', CC, CC);
     G.aord = Object.assign(defAord(), d.aord); G.allies = (d.allies || []).filter(a => Array.isArray(a) && BOTS[a[0]]).slice(0, BOT_MAX).map(([k, x, y, hp]) => newAlly(k, +x || CORE_X, +y || CORE_Y, Math.max(1, Math.min(+hp || 1, botMaxHp(k)))));
     if (!d.mv && G.mi >= BOT_MI) G.mi += 2; // missions robots insérées dans le chapitre 2
+    if ((d.mv || 0) < 3 && G.mi >= CAVE_MI) G.mi += 2; // missions grottes insérées dans le chapitre 3
+    if (!G.caves || typeof G.caves !== 'object') G.caves = {};
     Object.assign(P, d.p, { dead: false, inv: 0, cd: 0, chill: 0 });
     if (P.inRover && !G.rover) P.inRover = false;
     if (G.nightStarted) { G.toSpawn = 2 + 2 * waveDiff(); G.spawnT = 3; planWave(); }
@@ -1088,6 +1093,7 @@ function moveDrag(clx, cly) {
 function toggleBuild() {
   if (moving) cancelMove();
   if (paused && !buildMode) return;
+  if (UG && !buildMode) { toast('⛏️ Impossible de construire sous terre', 1.8); return; }
   buildMode = !buildMode; $('btnBuild').classList.toggle('on', buildMode); $('buildWrap').classList.toggle('hidden', !buildMode);
   if (!buildMode) buildSel = null; else { refreshBuildBar(true); if (!buildSel) toast('Choisis un module, puis touche une case verte', 2.6); }
 }
@@ -1295,13 +1301,15 @@ function openJournal() {
 // ---------- Carte ----------
 function openMap() {
   if (!started || G.over) return;
-  openModal(`<h2>🗺️ Carte de la planète</h2><canvas id="mapCv" width="${MW}" height="${MH}"></canvas><p style="font-size:14px">🟡 toi · ⚪ base · 🆘 capsule · 📦 épave · 🗿 ruine · 💀 repaire de boss · 🟣 nid · 🚩 avant-poste · 🎯 objectif. Zones : plus c'est loin, plus c'est dangereux… et riche !</p><div class="row"><button class="bigbtn grey" id="mClose">Fermer</button></div>`, true);
+  if (UG) { toast('🗺️ Pas de carte de la planète sous terre : regarde la mini-carte', 2.2); return; }
+  openModal(`<h2>🗺️ Carte de la planète</h2><canvas id="mapCv" width="${MW}" height="${MH}"></canvas><p style="font-size:14px">🟡 toi · ⚪ base · 🆘 capsule · 📦 épave · 🗿 ruine · 💀 repaire de boss · 🟣 nid · 🕳️ grotte · 🚩 avant-poste · 🎯 objectif. Zones : plus c'est loin, plus c'est dangereux… et riche !</p><div class="row"><button class="bigbtn grey" id="mClose">Fermer</button></div>`, true);
   $('mClose').onclick = closeModal;
   const c = $('mapCv'), g = c.getContext('2d'); g.imageSmoothingEnabled = false;
   g.drawImage(W.mmCv, 0, 0); g.drawImage(fogCv, 0, 0, EW, EW, 0, 0, MW, MH);
   g.strokeStyle = 'rgba(255,255,255,.15)'; for (const r of [45, 80, 115, 148]) { g.beginPath(); g.arc(CTX_, CTY_, r, 0, 6.283); g.stroke(); }
   g.font = 'bold 9px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
   W.pois.forEach((p, i) => {
+    if (p.k === 'cave') { if (caveFound(p)) g.fillText(G.caves[p.id].v ? '⛏️' : '🕳️', p.tx, p.ty); return; }
     if (!poiVisible(i)) return; if (p.k === 'nest') { if (G.pd[i]) return; g.fillStyle = '#c77dff'; g.fillRect(p.tx - 2, p.ty - 2, 4, 4); return; }
     const ic = p.k === 'pod' ? (G.pd[i] ? '✅' : '🆘') : p.k === 'wreck' ? (G.pd[i] ? '' : '📦') : p.k === 'ruin' ? (G.pd[i] ? '' : '🗿') : (G.stats.bosses[p.id] ? '' : '💀');
     if (ic) g.fillText(ic, p.tx, p.ty);
@@ -1459,6 +1467,8 @@ const MISSIONS = [
   { ch: 2, n: 'Explorateur', d: 'Visite 4 biomes différents (regarde la carte 🗺️). Plus loin = plus dangereux, mais plus riche.', p: () => [Math.min(Object.keys(S().biomes).length, 4), 4], rw: { g: 15, c: 10 } },
   { ch: 2, n: 'Foreuse renforcée', d: 'Fabrique la ⛏️ foreuse renforcée à l\'atelier : elle casse le titane 🔷.', p: () => B(G.tools.drill2), rw: { m: 20 } },
   { ch: 2, n: 'Titane', d: 'Récolte 15 🔷 titane (glacier ❄️ ou zone volcanique 🌋). Une foreuse auto niveau 2 peut aussi en extraire.', p: () => [Math.min(S().got.t, 15), 15], rw: { k: 10 }, tg: () => nearestNode(4) },
+  { ch: 2, n: 'Sous la surface', d: 'Trouve une 🕳️ entrée de grotte, touche « Entrer » et ouvre un 🧰 coffre des profondeurs. Attention : l\'O₂ baisse plus vite sous terre !', p: () => [(S().caves ? 1 : 0) + Math.min(S().chests || 0, 1), 2], rw: { t: 8, u: 3 }, start: () => revealNearestCave(), tg: () => caveMissionTarget() },
+  { ch: 2, n: 'Seigneur des profondeurs', d: 'Au fond de certaines grottes dort un 👑 Ver-roi. Descends le vaincre (armes et blindage conseillés).', p: () => B(S().bosses.deepboss), rw: { a: 1, i: 8 }, tg: () => caveBossTarget() },
   { ch: 2, n: 'L\'antenne', d: 'Construis l\'📶 antenne dans ta base (onglet 🏠).', p: () => B(count('antenna')), rw: { i: 4 }, start: () => { G.flags.antenna = 1; } },
   { ch: 2, n: 'Réparer l\'antenne', d: 'Touche l\'antenne et répare ses 3 parties : elle captera les balises de ton équipage.', p: () => [G.ant, 3], rw: { c: 10 } },
   { ch: 2, n: 'Le rover', d: 'Recherche « Véhicules », construis le 🚙 garage puis le rover : rapide, blindé, sans besoin d\'O₂ !', p: () => [(hasTech('vehicules') ? 1 : 0) + (count('garage') ? 1 : 0) + (G.rover ? 1 : 0), 3], rw: { k: 15 } },
@@ -1547,6 +1557,7 @@ function completeSide(i) {
 }
 
 const BOT_MI = MISSIONS.findIndex(m => m.n === 'Usine à robots');
+const CAVE_MI = MISSIONS.findIndex(m => m.n === 'Sous la surface');
 
 // ---------- Robots alliés (usine à robots) ----------
 function defAord() { return { sol: 'follow', min: 'mine', gar: 'guard', rep: 'follow' }; }
@@ -1605,10 +1616,12 @@ function updateBots(dt) {
   const f = botFab(), night = isNight(), cnt = { follow: 0, guard: 0 };
   for (let i = G.allies.length - 1; i >= 0; i--) {
     const a = G.allies[i], B = BOTS[a.k], mh = botMaxHp(a.k), ord = G.aord[a.k] || 'follow', spd = B.spd;
+    if (UG && !a.ug) continue; // restés en surface
     if (a.hit > 0) a.hit -= dt;
     a.a += dt * .6; a.fx = 0;
     // soin / retraite à l'usine
-    if (f && a.hp < mh * .35 && a.st !== 'heal') { a.st = 'heal'; if (a.load > 0) a.st = 'heal'; }
+    if (f && !UG && a.hp < mh * .35 && a.st !== 'heal') { a.st = 'heal'; if (a.load > 0) a.st = 'heal'; }
+    if (UG && a.st === 'heal') a.st = '';
     if (a.st === 'heal') {
       if (!f) { a.st = ''; }
       else if (botMove(a, f.x, f.y + 20, spd * 1.2, dt, 10)) { if (f.on) { a.hp = Math.min(mh, a.hp + F.botfab(f.lvl).heal * dt); if (Math.random() < .15) part(a.x, a.y - 4, '#80ffaa', 1, 15, .3); } if (a.hp >= mh) a.st = ''; }
@@ -1706,6 +1719,254 @@ function openBots() {
   box.querySelectorAll('[data-bord]').forEach(b => b.onclick = () => { const [k, o] = b.dataset.bord.split(':'); G.aord[k] = o; for (const a of G.allies) if (a.k === k) { a.node = -1; a.rt = 0; } SFX.beep(); saveGame(); openBots(); });
 }
 
+// ---------- Grottes souterraines ----------
+// Une grotte = petite carte séparée (64x64) placée dans un monde « vide » de roche-mère :
+// tout le moteur (collisions, minage, rendu en morceaux) fonctionne sans changement.
+let UG = null; // état souterrain (null = en surface)
+const CS = 64, COX = 8, COY = 8; // taille et position de la grotte dans sa carte
+BIOMES[6] = { n: 'Grotte', ic: '🕳️', floor: ['#1f1915', '#2a221c', '#17120f', '#33291f'], rock: ['#0c0907', '#3b2f27', '#5e4b3d'], mm: '#3a2c22' };
+EN.borer = { n: 'Foreur des profondeurs', hp: 14, spd: 46, r: 6, dmg: 9, rate: .8, armor: .5 };
+EN.glowworm = { n: 'Luciole acide', hp: 8, spd: 30, r: 5, dmg: 7, rate: 1.8, range: 80, shot: '#9ef01a' };
+EN.deepboss = { n: 'Ver-roi des profondeurs', hp: 320, spd: 22, r: 13, dmg: 22, rate: 1.1, boss: true, armor: .8 };
+const CAVE_DEPTH = ['peu profonde', 'profonde', 'très profonde', 'abyssale', 'abyssale'];
+function caveSprites() {
+  SPR.borer = mk(14, 14, g => { bug(g, 14, '#6f1d1b', '#bb9457', '#ffe66d', '#432818'); px(g, '#e0e1dd', 5, 0, 1, 3); px(g, '#e0e1dd', 8, 0, 1, 3); px(g, '#99582a', 4, 6, 6, 1); px(g, '#99582a', 4, 9, 6, 1); });
+  SPR.glowworm = mk(12, 12, g => { circ(g, 6, 7, 4, '#2b9348'); circ(g, 6, 7, 3, '#80b918'); circ(g, 6, 3, 2, '#d4ff70'); px(g, '#fff', 5, 2, 1, 1); px(g, '#ff0054', 4, 3, 1, 1); px(g, '#ff0054', 7, 3, 1, 1); });
+  SPR.deepboss = mk(30, 30, g => {
+    for (let i = 0; i < 5; i++) circ(g, 15, 27 - i * 4, 7 - (i === 0 ? 1 : 0), i % 2 ? '#5a189a' : '#3c096c');
+    circ(g, 15, 9, 9, '#240046'); circ(g, 15, 9, 7, '#7b2cbf'); for (let i = 0; i < 6; i++) { const a = -2.8 + i * .45; px(g, '#e0aaff', Math.round(15 + Math.cos(a) * 9), Math.round(9 + Math.sin(a) * 9), 2, 2); }
+    px(g, '#ffd60a', 10, 7, 3, 2); px(g, '#ffd60a', 17, 7, 3, 2); px(g, '#10002b', 11, 12, 8, 2); px(g, '#fff', 12, 12, 1, 1); px(g, '#fff', 17, 12, 1, 1);
+  });
+  SPR.chest = mk(16, 14, g => { px(g, '#3d2410', 1, 3, 14, 10); px(g, '#8b5a2b', 2, 4, 12, 8); px(g, '#a47148', 2, 4, 12, 3); px(g, '#ffd166', 7, 6, 2, 3); px(g, '#5e3b1c', 2, 7, 12, 1); px(g, '#c9a227', 1, 3, 1, 10); px(g, '#c9a227', 14, 3, 1, 10); });
+  SPR.chestOpen = mk(16, 14, g => { px(g, '#3d2410', 1, 3, 14, 10); px(g, '#1a1008', 2, 4, 12, 4); px(g, '#8b5a2b', 2, 8, 12, 4); px(g, '#a47148', 2, 0, 12, 3); });
+  SPR.caveHole = mk(28, 22, g => { circ(g, 14, 12, 10, '#3b2f27'); circ(g, 14, 12, 8, '#1a120d'); circ(g, 14, 13, 6, '#000'); px(g, '#5e4b3d', 5, 4, 4, 2); px(g, '#5e4b3d', 19, 3, 5, 2); px(g, '#8a7362', 6, 4, 2, 1); px(g, '#8a7362', 20, 3, 2, 1); });
+}
+{ const _bs = buildSprites; buildSprites = function () { _bs(); caveSprites(); }; }
+
+// ----- entrées en surface (ajoutées à la fin de la liste des lieux : anciennes sauvegardes compatibles) -----
+function addCaveEntrances(seed) {
+  const R = mulberry(seed + 4242), pois = W.pois, tiles = W.tiles;
+  const n = 10, a0 = R() * 6.283;
+  for (let k = 0; k < n; k++) {
+    for (let tries = 0; tries < 200; tries++) {
+      const a = a0 + k / n * 6.283 * 3 + (R() - .5) * .9, d = 30 + (k % 5) * 29 + R() * 14;
+      const x = Math.round(CTX_ + Math.cos(a) * d), y = Math.round(CTY_ + Math.sin(a) * d);
+      if (x < 10 || y < 10 || x >= MW - 10 || y >= MH - 10) continue;
+      if (tiles[y * MW + x] === 3 || tiles[y * MW + x] === 4) continue;
+      let ok = true; for (const p of pois) if (Math.hypot(p.tx - x, p.ty - y) < (tries < 150 ? 11 : 6)) { ok = false; break; }
+      if (!ok) continue;
+      for (let yy = y - 1; yy <= y + 2; yy++) for (let xx = x - 1; xx <= x + 1; xx++) { const i = yy * MW + xx; if (tiles[i] !== 2) tiles[i] = 0; if (W.nodeAt[i] >= 0) { W.nodes[W.nodeAt[i]].a = 0; W.nodeAt[i] = -1; } }
+      const tier = tierOfD(distC(x, y));
+      pois.push({ k: 'cave', id: 'cv' + k, tx: x, ty: y, x: x * TS + 8, y: y * TS + 8, tier, cs: (seed ^ (k * 7919 + 131)) | 0, boss: tier >= 2 || k % 3 === 1 });
+      break;
+    }
+  }
+}
+function caveSt(id) { if (!G.caves) G.caves = {}; return G.caves[id] || (G.caves[id] = { f: 0, v: 0, ch: [], b: 0 }); }
+function caveFound(p) { return G.caves && G.caves[p.id] && G.caves[p.id].f; }
+
+// ----- génération d'une grotte -----
+function genCave(p) {
+  const R = mulberry(p.cs), N = MW * MH, tier = p.tier;
+  const tiles = new Uint8Array(N).fill(2), biome = new Uint8Array(N).fill(6), nodeAt = new Int16Array(N).fill(-1);
+  const T = (x, y) => (COY + y) * MW + COX + x;
+  for (let y = 1; y < CS - 1; y++) for (let x = 1; x < CS - 1; x++) tiles[T(x, y)] = 1;
+  const rooms = [], want = 7 + Math.min(tier, 3) + (R() * 2 | 0);
+  for (let t = 0; t < 400 && rooms.length < want; t++) {
+    const w = rooms.length ? 5 + (R() * 7 | 0) : 7, h = rooms.length ? 5 + (R() * 7 | 0) : 7;
+    const x = rooms.length ? 2 + (R() * (CS - w - 4) | 0) : (CS - w) >> 1, y = rooms.length ? 2 + (R() * (CS - h - 4) | 0) : 3;
+    if (rooms.some(r => x < r.x + r.w + 2 && x + w + 2 > r.x && y < r.y + r.h + 2 && y + h + 2 > r.y)) continue;
+    rooms.push({ x, y, w, h, cx: x + (w >> 1), cy: y + (h >> 1) });
+  }
+  const carve = (x, y) => { if (x > 0 && y > 0 && x < CS - 1 && y < CS - 1) tiles[T(x, y)] = 0; };
+  for (const r of rooms) for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) {
+    const corner = (x === r.x || x === r.x + r.w - 1) && (y === r.y || y === r.y + r.h - 1);
+    if (!corner || R() < .4) carve(x, y);
+  }
+  for (let i = 1; i < rooms.length; i++) { // couloirs vers la salle la plus proche déjà reliée
+    const a = rooms[i]; let b = rooms[0], bd = 1e9; for (let j = 0; j < i; j++) { const d = Math.abs(rooms[j].cx - a.cx) + Math.abs(rooms[j].cy - a.cy); if (d < bd) { bd = d; b = rooms[j]; } }
+    let x = a.cx, y = a.cy; const hf = R() < .5;
+    const stepX = () => { while (x !== b.cx) { carve(x, y); carve(x, y + 1); x += Math.sign(b.cx - x); if (R() < .08) y = clamp(y + (R() < .5 ? -1 : 1), 2, CS - 4); } };
+    const stepY = () => { while (y !== b.cy) { carve(x, y); carve(x + 1, y); y += Math.sign(b.cy - y); } };
+    if (hf) { stepX(); stepY(); } else { stepY(); stepX(); }
+    carve(x, y);
+  }
+  W = { seed: p.cs, tiles, biome, nodeAt, nodes: [], pois: [], cave: 1 };
+  const st = caveSt(p.id), ent = rooms[0];
+  let far = ent; for (const r of rooms) if (Math.hypot(r.cx - ent.cx, r.cy - ent.cy) > Math.hypot(far.cx - ent.cx, far.cy - ent.cy)) far = r;
+  // gisements rares au pied des parois
+  const wts = [['m', .14], ['c', .26], ['t', .3], ['u', .12 + .05 * tier], ['a', .02 + .025 * tier], ['f', .06]];
+  for (let y = 2; y < CS - 2; y++) for (let x = 2; x < CS - 2; x++) {
+    const i = T(x, y); if (tiles[i] !== 0) continue;
+    if (Math.abs(x - ent.cx) < 5 && Math.abs(y - ent.cy) < 5) continue;
+    const wall = tiles[i - 1] === 1 || tiles[i + 1] === 1 || tiles[i - MW] === 1 || tiles[i + MW] === 1;
+    if (!wall || R() > .085) continue;
+    let r = R() * wts.reduce((s, w) => s + w[1], 0), key = 'm'; for (const [k, w] of wts) { r -= w; if (r <= 0) { key = k; break; } }
+    const t = NODE_IDX[key]; nodeAt[i] = W.nodes.length; W.nodes.push({ t, x: COX + x, y: COY + y, a: Math.round((t === 6 ? 1 + R() * 2 : 3 + R() * 4) * (1 + .3 * tier)) });
+  }
+  if (st.n) st.n.forEach((a, k) => { const n = W.nodes[k]; if (!n) return; n.a = a; if (a <= 0) nodeAt[n.y * MW + n.x] = -1; });
+  // lieux : sortie, coffres, pièges, boss
+  const pos = (x, y) => ({ tx: COX + x, ty: COY + y, x: (COX + x) * TS + 8, y: (COY + y) * TS + 8 });
+  const freeIn = (r) => { for (let t = 0; t < 30; t++) { const x = r.x + 1 + (R() * (r.w - 2) | 0), y = r.y + 1 + (R() * (r.h - 2) | 0), i = T(x, y); if (tiles[i] === 0 && nodeAt[i] < 0) return [x, y]; } return [r.cx, r.cy]; };
+  const clear1 = (x, y) => { const i = T(x, y); tiles[i] = 0; if (nodeAt[i] >= 0) { W.nodes[nodeAt[i]].a = 0; nodeAt[i] = -1; } };
+  clear1(ent.cx, ent.cy - 1); W.pois.push(Object.assign({ k: 'exit' }, pos(ent.cx, ent.cy - 1)));
+  const others = rooms.slice(1), nch = Math.min(others.length, 2 + (tier >= 2 ? 1 : 0) + (R() < .5 ? 1 : 0));
+  for (let j = 0; j < nch; j++) { const r = others[(j * 3 + 1) % others.length], [x, y] = freeIn(r); clear1(x, y); W.pois.push(Object.assign({ k: 'chest', j, wr: R() < .35, done: st.ch.includes(j) }, pos(x, y))); }
+  const traps = 3 + tier + (R() * 3 | 0);
+  for (let j = 0; j < traps; j++) { const r = others[(R() * others.length) | 0]; if (!r) break; const [x, y] = freeIn(r); const k = ['geyser', 'acid', 'fall'][j % 3]; W.pois.push(Object.assign({ k, ph: R() * 4, rad: 10 + (R() * 8 | 0), cd: 0, arm: 0 }, pos(x, y))); }
+  if (p.boss) W.pois.push(Object.assign({ k: 'boss' }, pos(far.cx, far.cy)));
+  W.rooms = rooms; W.ent = ent; W.far = far; W.minedMark = new Uint8Array(N);
+  return { rooms, ent, far };
+}
+function spawnCaveEnemies() {
+  const tier = UG.p.tier;
+  for (const r of W.rooms) {
+    if (r === W.ent) continue;
+    const n = 1 + (Math.random() * (1.5 + tier * .6) | 0);
+    for (let k = 0; k < n; k++) {
+      const type = pick(['borer', 'glowworm', tier >= 2 ? 'carapace' : 'crawler', 'borer']);
+      const x = (COX + r.x + 1 + Math.random() * (r.w - 2)) * TS, y = (COY + r.y + 1 + Math.random() * (r.h - 2)) * TS;
+      if (solidTile(x, y)) continue;
+      const e = spawnEnemy(type, x, y, { sc: 1 + .45 * tier, dmg: 1 + .2 * tier }); e.cave = 1;
+    }
+  }
+}
+
+// ----- entrer / sortir -----
+function enterCave(i) {
+  const p = W.pois[i]; if (!p || UG) return;
+  if (P.inRover) { toast('🚙 Le rover ne passe pas : descends d\'abord !', 2.2); SFX.err(); return; }
+  if (buildMode) toggleBuild();
+  const st = caveSt(p.id), first = !st.v; st.f = 1; st.v = 1;
+  if (first) G.stats.caves = (G.stats.caves || 0) + 1;
+  UG = { i, p, id: p.id, sw: W, sp: { x: P.x, y: P.y }, se: enemies, sb: bullets, warnT: 0, tickT: 0, att: 0, bossOn: false };
+  enemies = []; bullets = []; shells = []; flames = []; arcs = []; meteors = []; parts = []; activeNests = []; rockHits.clear();
+  genCave(p); buildMapCanvas();
+  UG.exp = new Uint8Array(EW * EW); UG.fogCv = document.createElement('canvas'); UG.fogCv.width = UG.fogCv.height = EW; UG.fogG = UG.fogCv.getContext('2d'); UG.fogG.fillStyle = 'rgba(5,3,10,0.92)'; UG.fogG.fillRect(0, 0, EW, EW);
+  const ex = W.pois[0]; P.x = ex.x; P.y = ex.y + 22; P.ang = Math.PI / 2;
+  for (const a of G.allies) if ((G.aord[a.k] || 'follow') === 'follow' && a.st !== 'heal') { a.ug = 1; a.x = P.x + rnd(-16, 16); a.y = P.y + rnd(4, 20); a.node = -1; a.load = 0; }
+  spawnCaveEnemies();
+  SFX.beep(); shake = 4;
+  banner('Grotte ' + CAVE_DEPTH[p.tier], '🕳️ Sous la surface', 'Minerais rares, coffres… et pièges ! L\'O₂ baisse plus vite ici.', 3.5);
+  checkMissionSoon(); saveGame();
+}
+function leaveCave(silent) {
+  if (!UG) return;
+  const st = caveSt(UG.id); st.n = W.nodes.map(n => n.a);
+  const sp = UG.sp, se = UG.se;
+  W = UG.sw; chunkCache.clear(); UG = null;
+  enemies = se; bullets = []; shells = []; flames = []; arcs = []; parts = []; activeNests = []; rockHits.clear();
+  P.x = sp.x; P.y = sp.y;
+  for (const a of G.allies) if (a.ug) { delete a.ug; a.x = P.x + rnd(-14, 14); a.y = P.y + rnd(6, 18); }
+  if (!silent) { toast('☀️ De retour à la surface', 1.8); SFX.dawn(); }
+  checkMissionSoon(); saveGame();
+}
+function caveContext() {
+  for (const p of W.pois) {
+    const d = dist(P.x, P.y, p.x, p.y);
+    if (p.k === 'exit' && d < 28) return { ic: '🪜', t: 'Sortir', f: () => leaveCave() };
+    if (p.k === 'chest' && !p.done && d < 24) return { ic: p.wr ? '📦' : '🧰', t: 'Ouvrir', f: () => openChest(p) };
+  }
+  return null;
+}
+function openChest(p) {
+  const st = caveSt(UG.id), tier = UG.p.tier; p.done = true; if (!st.ch.includes(p.j)) st.ch.push(p.j);
+  G.stats.chests = (G.stats.chests || 0) + 1;
+  const rw = { c: 5 + 2 * tier, t: 3 + 2 * tier }; if (tier >= 1) rw.u = 1 + tier; if (tier >= 3 || Math.random() < .2 + .1 * tier) rw.a = 1; if (p.wr) rw.k = 6 + 3 * tier; else rw.f = 4 + tier;
+  addRes(rw); SFX.win(); part(p.x, p.y, '#ffd166', 26, 55, .7);
+  toast((p.wr ? '📦 Épave fouillée : ' : '🧰 Coffre ouvert : ') + costTxt(rw), 3); checkMissionSoon(); saveGame();
+}
+function caveBossKilled(e) {
+  G.stats.bosses.deepboss = (G.stats.bosses.deepboss || 0) + 1;
+  if (UG) caveSt(UG.id).b = 1;
+  const t = UG ? UG.p.tier : 1, rw = { u: 4 + 2 * t, a: 1 + (t >= 2 ? 1 : 0), t: 10 + 3 * t, i: 4 + 2 * t };
+  addRes(rw); banner('Mini-boss vaincu', '👑 ' + EN.deepboss.n, 'Récompense : ' + costTxt(rw), 4.5); SFX.win(); checkMissionSoon(); saveGame();
+}
+function deepBossAI(e, dt) {
+  const enr = e.hp < e.maxHp * .5 ? 1.5 : 1;
+  if (e.bt > 3.2 / enr) { e.bt = 0; for (let k = 0; k < 10; k++) { const a = k / 10 * 6.283 + e.wob; bullets.push({ x: e.x, y: e.y, vx: Math.cos(a) * 85, vy: Math.sin(a) * 85, life: 1.8, dmg: 9, team: 'e', col: '#9ef01a', s: 4 }); } tone(200, .2, 'sawtooth', .04, -100); }
+  e.bt2 += dt; if (e.bt2 > 7) { e.bt2 = 0; for (let k = 0; k < 2; k++) { const s = spawnEnemy('borer', e.x + rnd(-16, 16), e.y + rnd(-16, 16), { sc: 1 + .3 * UG.p.tier }); s.cave = 1; } }
+}
+
+// ----- mise à jour sous terre -----
+function updateCave(dt) {
+  if (!UG) return;
+  const tier = UG.p.tier;
+  for (const p of W.pois) {
+    const d = P.dead ? 1e9 : dist(P.x, P.y, p.x, p.y);
+    if (p.k === 'geyser') {
+      p.ph = (p.ph + dt) % 4.2;
+      if (p.ph > 2.8 && p.ph < 3.4 && Math.random() < .3) part(p.x, p.y, '#caf0f8', 1, 15, .4);
+      if (p.ph >= 3.4) { if (Math.random() < .7) part(p.x + rnd(-4, 4), p.y, '#e9f5ff', 2, 50, .6, 2); if (d < 16 && !p.hit) { p.hit = 1; hurtPlayer(10 + 4 * tier); toast('♨️ Geyser brûlant !', 1.2); } }
+      else p.hit = 0;
+    } else if (p.k === 'acid') {
+      if (d < p.rad) { hurtPlayerRaw((5 + 2 * tier) * dt); if (Math.random() < .2) part(P.x, P.y, '#9ef01a', 1, 20, .3); if (!p.warn || performance.now() - p.warn > 3000) { p.warn = performance.now(); toast('🧪 Flaque d\'acide : sors-en vite !', 1.4); } }
+      if (Math.random() < .03) part(p.x + rnd(-p.rad / 2, p.rad / 2), p.y + rnd(-p.rad / 3, p.rad / 3), '#b5e48c', 1, 6, .6);
+    } else if (p.k === 'fall') {
+      if (p.cd > 0) p.cd -= dt;
+      else if (!p.arm && d < 22) { p.arm = 1; tone(90, .5, 'square', .03, -40); toast('⚠️ Éboulement !', 1); }
+      if (p.arm) { p.arm += dt; if (Math.random() < .4) part(p.x + rnd(-14, 14), p.y - 14, '#8a7362', 1, 10, .4); if (p.arm > 1.9) { p.arm = 0; p.cd = 7; boom(p.x, p.y, '#6e5a55', 20); if (d < 22) hurtPlayer(14 + 5 * tier); } }
+    } else if (p.k === 'boss' && !caveSt(UG.id).b && !UG.bossOn && d < 230) {
+      UG.bossOn = true; const e = spawnEnemy('deepboss', p.x, p.y, { sc: .7 + .3 * tier }); e.cave = 1;
+      toast('⚠️ ' + EN.deepboss.n + ' surgit des profondeurs !', 3); SFX.alarm();
+    }
+  }
+  // la surface continue pendant ce temps
+  UG.tickT -= dt;
+  if (UG.tickT <= 0) {
+    UG.tickT = 1;
+    const att = UG.se.filter(e => e.wave && !e.dead && e.hp > 0); UG.att = att.length;
+    if (att.length) {
+      let pool = 0; for (const m of G.mods) if (TURRETS[m.type] && m.on) pool += 5 * m.lvl;
+      if (!isNight()) pool += 3 * att.length;
+      for (const e of att) { if (pool <= 0) break; const h = Math.min(pool, e.hp); e.hp -= h; pool -= h; if (e.hp <= 0) { e.dead = true; G.stats.kills++; } }
+      UG.se = UG.se.filter(e => !(e.dead || e.hp <= 0));
+      const left = UG.se.filter(e => e.wave).length; UG.att = left;
+      const tg = G.mods.filter(m => m.type !== 'core'); const any = tg.length ? tg : G.mods;
+      if (left > 0 && any.length && Math.random() < .6) hurtMod(pick(any), 2 * Math.min(left, 12));
+      UG.warnT -= 1; if (left > 0 && UG.warnT <= 0) { UG.warnT = 10; toast('⚠️ La base est attaquée ! ' + left + ' 👾 · ressors pour la défendre', 3); SFX.alarm(); }
+    }
+  }
+}
+function caveReveal() {
+  const cx = P.x / (EXP * TS) | 0, cy = P.y / (EXP * TS) | 0;
+  for (let y = cy - 1; y <= cy + 1; y++) for (let x = cx - 1; x <= cx + 1; x++) { if (x < 0 || y < 0 || x >= EW || y >= EW) continue; const i = y * EW + x; if (!UG.exp[i]) { UG.exp[i] = 1; UG.fogG.clearRect(x, y, 1, 1); } }
+}
+// ----- dessin -----
+function drawCavePoi(p, X, Y) {
+  if (p.k === 'exit') { ctx.fillStyle = '#ffd16655'; ctx.fillRect(X - 9, Y - 9, 18, 18); ctx.fillStyle = '#8a7362'; for (let k = 0; k < 4; k++) ctx.fillRect(X - 6, Y - 8 + k * 5, 12, 2); ctx.fillStyle = '#5e4b3d'; ctx.fillRect(X - 7, Y - 9, 2, 18); ctx.fillRect(X + 5, Y - 9, 2, 18); if (frame % 50 < 30) { ctx.fillStyle = '#fff3b0'; ctx.fillRect(X - 1, Y - 14, 2, 3); } }
+  else if (p.k === 'chest') ctx.drawImage(p.done ? (p.wr ? SPR.wreck : SPR.chestOpen) : (p.wr ? SPR.wreck : SPR.chest), X - (p.wr ? 12 : 8), Y - (p.wr ? 10 : 7));
+  else if (p.k === 'acid') { ctx.fillStyle = '#386641cc'; ctx.beginPath(); ctx.ellipse(X, Y, p.rad, p.rad * .6, 0, 0, 6.283); ctx.fill(); ctx.fillStyle = '#9ef01a88'; ctx.beginPath(); ctx.ellipse(X - 1, Y - 1, p.rad * .7, p.rad * .4, 0, 0, 6.283); ctx.fill(); }
+  else if (p.k === 'geyser') { ctx.fillStyle = '#0d1b2a'; ctx.beginPath(); ctx.arc(X, Y, 5, 0, 6.283); ctx.fill(); ctx.strokeStyle = p.ph > 2.8 ? '#e9f5ff' : '#415a77'; ctx.stroke(); if (p.ph >= 3.4) { ctx.fillStyle = 'rgba(233,245,255,.55)'; ctx.fillRect(X - 3, Y - 26, 6, 26); } }
+  else if (p.k === 'fall') { ctx.fillStyle = '#4a3b30'; ctx.fillRect(X - 7, Y - 2, 4, 3); ctx.fillRect(X + 3, Y + 1, 5, 3); if (p.arm) { ctx.fillStyle = `rgba(0,0,0,${.2 + .3 * p.arm / 1.9})`; ctx.beginPath(); ctx.arc(X, Y, 20, 0, 6.283); ctx.fill(); } }
+}
+function drawCaveEntrance(p, X, Y, i) {
+  ctx.drawImage(SPR.caveHole, X - 14, Y - 11);
+  const st = G.caves && G.caves[p.id];
+  if (!st || !st.v) { const r = 13 + (frame % 70) / 5; ctx.strokeStyle = `rgba(255,170,90,${1 - (frame % 70) / 70})`; ctx.beginPath(); ctx.arc(X, Y, r, 0, 6.283); ctx.stroke(); }
+  ctx.font = 'bold 7px monospace'; ctx.textAlign = 'center'; ctx.fillStyle = '#000'; ctx.fillText('Grotte', X + 1, Y - 13); ctx.fillStyle = ['#b7e4c7', '#ffd166', '#f4a261', '#e76f51', '#ff006e'][p.tier]; ctx.fillText('Grotte', X, Y - 14);
+}
+function renderCaveMinimap() {
+  mg.imageSmoothingEnabled = false; const S = 150;
+  mg.fillStyle = '#000'; mg.fillRect(0, 0, S, S);
+  const x0 = COX - (S - CS) / 2, y0 = COY - (S - CS) / 2;
+  mg.drawImage(W.mmCv, x0, y0, S, S, 0, 0, S, S);
+  mg.drawImage(UG.fogCv, 0, 0, EW, EW, -x0, -y0, MW, MH);
+  for (const p of W.pois) { const x = p.tx - x0, y = p.ty - y0; if (!UG.exp[(p.ty / EXP | 0) * EW + (p.tx / EXP | 0)]) continue; if (p.k === 'exit') { mg.fillStyle = '#80ffaa'; mg.fillRect(x - 2, y - 2, 5, 5); } else if (p.k === 'chest' && !p.done) { mg.fillStyle = '#ffd166'; mg.fillRect(x - 1, y - 1, 3, 3); } else if (p.k === 'boss' && !caveSt(UG.id).b) { mg.fillStyle = '#ff006e'; mg.fillRect(x - 2, y - 2, 5, 5); } }
+  for (const e of enemies) { if (dist(e.x, e.y, P.x, P.y) > 160) continue; mg.fillStyle = '#ff0054'; mg.fillRect((e.x / TS | 0) - x0 - 1, (e.y / TS | 0) - y0 - 1, 2, 2); }
+  if (frame % 30 < 20) { mg.fillStyle = '#ffd166'; mg.fillRect((P.x / TS | 0) - x0 - 1, (P.y / TS | 0) - y0 - 1, 3, 3); }
+  if (UG.att && frame % 20 < 12) { mg.fillStyle = '#ff0054'; mg.font = 'bold 11px sans-serif'; mg.textAlign = 'center'; mg.fillText('⚠ BASE ATTAQUÉE', S / 2, 14); }
+}
+function caveMissionTarget() {
+  if (UG) { const c = W.pois.find(p => p.k === 'chest' && !p.done); return c ? { x: c.x, y: c.y, cave: 1 } : { x: W.pois[0].x, y: W.pois[0].y, cave: 1 }; }
+  let best = null, bd = 1e9; W.pois.forEach(p => { if (p.k !== 'cave') return; const d = dist(P.x, P.y, p.x, p.y) + (caveFound(p) ? 0 : 400); if (d < bd) { bd = d; best = p; } }); return best;
+}
+function caveBossTarget() {
+  if (UG) { const b = W.pois.find(p => p.k === 'boss'); if (b && !caveSt(UG.id).b) return { x: b.x, y: b.y, cave: 1 }; return { x: W.pois[0].x, y: W.pois[0].y, cave: 1 }; }
+  let best = null, bd = 1e9; W.pois.forEach(p => { if (p.k !== 'cave' || !p.boss || caveSt(p.id).b) return; const d = dist(P.x, P.y, p.x, p.y) + p.tier * 600; if (d < bd) { bd = d; best = p; } }); return best;
+}
+function revealNearestCave() { const p = caveMissionTarget(); if (p && p.id) caveSt(p.id).f = 1; }
+
 // ---------- Mise à jour ----------
 let rdrones = [], tdrones = [], activeNests = [], survPos = [];
 let fogCv = null, fogG = null;
@@ -1750,9 +2011,13 @@ function spawnEnemy(type, x, y, opt = {}) {
   if (!d.boss && hasTech('xeno')) sc *= .85;
   const hp = d.hp * sc;
   const e = { type, x, y, hp, maxHp: hp, cd: 0, r: d.r, ang: 0, tgt: null, rt: 0, side: 1, sideT: 0, hit: 0, bt: 0, bt2: 0, wob: Math.random() * 6, dmgMul: opt.dmg || 1, wave: !!opt.wave, wild: !!opt.wild, nest: opt.nest, lair: opt.lair, slow: 0, burn: 0, dash: 0, hx: x, hy: y };
-  enemies.push(e); return e;
+  if (UG && opt.wave) UG.se.push(e); else enemies.push(e); return e;
 }
 function spawnRing(cx, cy, r0, r1, fly, a0, spread) {
+  if (UG && cx > (COX + CS) * TS) { const cw = W; W = UG.sw; try { return spawnRing0(cx, cy, r0, r1, fly, a0, spread); } finally { W = cw; } }
+  return spawnRing0(cx, cy, r0, r1, fly, a0, spread);
+}
+function spawnRing0(cx, cy, r0, r1, fly, a0, spread) {
   for (let k = 0; k < 25; k++) {
     const a = a0 == null ? Math.random() * 6.283 : a0 + rnd(-spread, spread), r = rnd(r0, r1);
     const x = clamp(cx + Math.cos(a) * r, 40, MW * TS - 40), y = clamp(cy + Math.sin(a) * r, 40, MH * TS - 40);
@@ -1888,12 +2153,13 @@ function killEnemy(i) {
   if (d.kamikaze) aoeHurt(e.x, e.y, 30, 10);
   if (d.boss) { bossKilled(e); return; }
   if (e.wave && !isNight()) return;
-  const tier = tierAt(e.x, e.y);
+  const tier = UG ? UG.p.tier : tierAt(e.x, e.y);
   if (Math.random() < .3 + .05 * tier) gain('f', 1, e.x, e.y, true);
   if (tier >= 2 && Math.random() < .15) gain('c', 1, e.x + 5, e.y, true);
 }
 function aoeHurt(x, y, r, dmg) { if (!P.dead && dist(x, y, P.x, P.y) < r) hurtPlayer(dmg); for (const m of G.mods) if (dist(x, y, m.x, m.y) < r + 10) hurtMod(m, dmg); }
 function bossKilled(e) {
+  if (e.type === 'deepboss') return caveBossKilled(e);
   const id = e.type; G.stats.bosses[id] = (G.stats.bosses[id] || 0) + 1;
   const rw = { queen: { c: 15, f: 10 }, golem: { t: 20, u: 6, k: 20 }, mantis: { c: 40, a: 2, i: 10 }, titan: { a: 4, u: 15, i: 20 } }[id];
   addRes(rw);
@@ -1959,8 +2225,9 @@ function update(dt) {
   updateBots(dt);
   // ----- joueur -----
   updatePlayer(dt);
+  if (UG) updateCave(dt);
   // ----- ennemis -----
-  updateSpawns(dt);
+  if (!UG) updateSpawns(dt);
   updateEnemies(dt);
   updateProjectiles(dt);
   updateParts(dt);
@@ -2003,6 +2270,7 @@ function updateEvents(dt, prevT) {
   }
 }
 function spawnMeteor() {
+  if (UG) return;
   const nearBase = Math.random() < .35;
   const cx = nearBase ? CORE_X : P.x, cy = nearBase ? CORE_Y : P.y, a = Math.random() * 6.283, r = rnd(30, 260);
   meteors.push({ x: clamp(cx + Math.cos(a) * r, 50, MW * TS - 50), y: clamp(cy + Math.sin(a) * r, 50, MH * TS - 50), t: 1.8 });
@@ -2147,6 +2415,7 @@ function exitRover() {
 let ctxAction = null;
 function computeContext() {
   if (P.dead) return null;
+  if (UG) return caveContext();
   if (P.inRover) return { ic: '🚶', t: 'Descendre', f: exitRover };
   if (G.rover && dist(P.x, P.y, G.rover.x, G.rover.y) < 24) return { ic: '🚙', t: 'Monter', f: enterRover };
   for (let i = 0; i < W.pois.length; i++) {
@@ -2155,6 +2424,7 @@ function computeContext() {
     if (p.k === 'pod' && d < 30) return { ic: '🆘', t: 'Ouvrir', f: () => rescue(i) };
     if (p.k === 'wreck' && d < 30) return { ic: '📦', t: 'Fouiller', f: () => searchWreck(i) };
     if (p.k === 'ruin' && d < 22) return { ic: '🗿', t: 'Prendre', f: () => takeRelic(i) };
+    if (p.k === 'cave' && d < 26) return { ic: '🕳️', t: 'Entrer', f: () => enterCave(i) };
   }
   const tp = G.mods.find(m => m.type === 'teleporter' && dist(P.x, P.y, m.x, m.y) < 22);
   if (tp) return { ic: '🌀', t: 'Téléporter', f: () => openModPanel(tp) };
@@ -2183,7 +2453,7 @@ let expT = 0;
 function updatePlayer(dt) {
   if (P.inv > 0) P.inv -= dt; if (P.chill > 0) P.chill -= dt;
   if (P.dead) {
-    P.rt -= dt; if (P.rt <= 0) { Object.assign(P, { dead: false, inRover: false, x: CORE_X, y: CORE_Y + 34, hp: maxHp(), en: 60, o2: maxO2(), inv: 2 }); toast('🤖 Robot réparé !', 1.6); }
+    P.rt -= dt; if (P.rt <= 0) { if (UG) leaveCave(true); Object.assign(P, { dead: false, inRover: false, x: CORE_X, y: CORE_Y + 34, hp: maxHp(), en: 60, o2: maxO2(), inv: 2 }); toast('🤖 Robot réparé !', 1.6); }
     return;
   }
   let mx = joy.dx || 0, my = joy.dy || 0;
@@ -2214,11 +2484,11 @@ function updatePlayer(dt) {
   } else if (op) {
     P.o2 = Math.min(maxO2(), P.o2 + 12 * dt); const tr = Math.min(6 * dt, G.baseE, maxEn() - P.en); P.en += tr; G.baseE -= tr; lowWarn = false;
   } else if (!P.inRover) {
-    const tier = tierAt(P.x, P.y), storm = G.ev && G.ev.on && G.ev.type === 'storm';
-    P.o2 = Math.max(0, P.o2 - 1.0 * TIER_O2[tier] * (G.tools.tank2 ? .7 : 1) * (storm ? 1.5 : 1) * dt);
+    const tier = UG ? UG.p.tier : tierAt(P.x, P.y), storm = !UG && G.ev && G.ev.on && G.ev.type === 'storm';
+    P.o2 = Math.max(0, P.o2 - 1.0 * TIER_O2[tier] * (UG ? 1.7 : 1) * (G.tools.tank2 ? .7 : 1) * (storm ? 1.5 : 1) * dt);
     P.en = Math.max(0, P.en - (.2 + (mag > .1 ? .3 : 0)) * dt);
     if (P.o2 <= 0) hurtPlayerRaw(6 * dt);
-    if ((P.o2 < 25 || P.en < 15) && !lowWarn) { lowWarn = true; toast(P.o2 < 25 ? '🫧 Oxygène faible ! Retourne au dôme' : '⚡ Énergie faible ! Retourne au dôme', 3); SFX.alarm(); }
+    if ((P.o2 < 25 || P.en < 15) && !lowWarn) { lowWarn = true; toast(P.o2 < 25 ? (UG ? '🫧 Oxygène faible ! Sors de la grotte (🪜)' : '🫧 Oxygène faible ! Retourne au dôme') : '⚡ Énergie faible ! Retourne au dôme', 3); SFX.alarm(); }
   }
   if (G.tools.medkit && !inDome) P.hp = Math.min(maxHp(), P.hp + .8 * healMul * dt);
   // action
@@ -2232,7 +2502,11 @@ function updatePlayer(dt) {
     else { const tg = mineTarget(); if (tg) { doMine(tg); P.cd = .42 / drillMul(); } else { shoot(P.x + Math.cos(P.ang) * 50, P.y + Math.sin(P.ang) * 50); P.cd = .35; } }
   }
   expT -= dt;
-  if (expT <= 0) { expT = .25; revealAround(P.x, P.y, P.inRover ? 3 : 2); G.stats.biomes[biomeAt(P.x, P.y)] = 1; }
+  if (expT <= 0) {
+    expT = .25;
+    if (UG) caveReveal();
+    else { revealAround(P.x, P.y, P.inRover ? 3 : 2); G.stats.biomes[biomeAt(P.x, P.y)] = 1; for (const p of W.pois) if (p.k === 'cave' && Math.abs(p.x - P.x) < 170 && Math.abs(p.y - P.y) < 170) { const st = caveSt(p.id); if (!st.f) { st.f = 1; toast('🕳️ Entrée de grotte découverte !', 2.2); SFX.beep(); } } }
+  }
 }
 function nearestActiveNest(r) { let best = null, bd = r; for (const i of activeNests) { if (G.pd[i]) continue; const p = W.pois[i], d = dist(P.x, P.y, p.x, p.y); if (d < bd) { bd = d; best = p; } } return best; }
 // ----- apparitions -----
@@ -2334,6 +2608,7 @@ function bossAI(e, dt, dd) {
   e.bt += dt;
   const enr = e.hp < e.maxHp * .5 ? 1.5 : 1;
   switch (e.type) {
+    case 'deepboss': deepBossAI(e, dt); break;
     case 'queen': if (e.bt > 6 / enr) { e.bt = 0; spawnEnemy('crawler', e.x + rnd(-14, 14), e.y + rnd(-14, 14), { wave: e.wave, wild: !e.wave }); } break;
     case 'golem': if (e.bt > 4 / enr) { e.bt = 0; for (let k = 0; k < 12; k++) { const a = k / 12 * 6.283; bullets.push({ x: e.x, y: e.y, vx: Math.cos(a) * 90, vy: Math.sin(a) * 90, life: 2, dmg: 12, team: 'e', col: '#ff7b00', s: 4 }); } noise(.3, .08, 500); } break;
     case 'mantis': if (e.bt > 3 / enr) { e.bt = 0; e.dash = .4; tone(900, .2, 'sawtooth', .04, 600); } e.bt2 += dt; if (e.bt2 > 5) { e.bt2 = 0; for (let k = 0; k < 8; k++) { const a = k / 8 * 6.283; bullets.push({ x: e.x, y: e.y, vx: Math.cos(a) * 120, vy: Math.sin(a) * 120, life: 1.5, dmg: 9, team: 'e', col: '#4cc9f0', s: 3 }); } } break;
@@ -2469,6 +2744,8 @@ function render() {
     else if (p.k === 'wreck') { ctx.globalAlpha = G.pd[i] ? .45 : 1; ctx.drawImage(SPR.wreck, X - 12, Y - 10); ctx.globalAlpha = 1; if (!G.pd[i] && frame % 50 < 10) { ctx.fillStyle = '#adb5bd'; ctx.fillRect(X + 6, Y - 12 - (frame % 50) / 2, 2, 2); } }
     else if (p.k === 'ruin') { ctx.drawImage(G.pd[i] ? SPR.relicDone : SPR.relic, X - 10, Y - 12); }
     else if (p.k === 'lair' && !G.stats.bosses[p.id]) { ctx.drawImage(SPR.lair, X - 16, Y - 16); }
+    else if (p.k === 'cave') drawCaveEntrance(p, X, Y, i);
+    else if (W.cave) drawCavePoi(p, X, Y);
     else if (p.k === 'nest' && !G.pd[i]) { ctx.drawImage(SPR.nest, X - 12, Y - 12); const hp = G.nestHp[i]; if (hp != null) bar(X - 12, Y - 16, 24, hp / p.hp, '#c77dff'); if (frame % 40 < 20) { ctx.fillStyle = '#ff0054'; ctx.fillRect(X - 1, Y, 2, 2); } }
   }
   // modules
@@ -2510,14 +2787,15 @@ function render() {
   for (const p of parts) { ctx.fillStyle = p.col; ctx.fillRect(Math.round(p.x + ox), Math.round(p.y + oy), p.s, p.s); }
   if (!P.dead && !P.inRover && !nearestEnemy(P.x, P.y, 130)) { const tg = mineTarget(); if (tg && frame % 40 < 28) { ctx.strokeStyle = tg.node && NODE_NEED[tg.node.t] > drillMul() ? 'rgba(255,90,90,0.8)' : 'rgba(255,255,255,0.7)'; ctx.strokeRect(tg.tx * TS + ox + .5, tg.ty * TS + oy + .5, 15, 15); } }
   // nuit & tempête
-  const storm = G.ev && G.ev.on && G.ev.type === 'storm';
-  const dk = Math.max(darkness(G.t), storm ? .35 : 0);
+  const storm = !UG && G.ev && G.ev.on && G.ev.type === 'storm';
+  const dk = UG ? .95 : Math.max(darkness(G.t), storm ? .35 : 0);
   if (dk > .01) {
     lg.globalCompositeOperation = 'source-over'; lg.clearRect(0, 0, VW, VH);
     lg.fillStyle = storm && dk < .5 ? `rgba(60,25,10,${dk})` : `rgba(8,4,28,${dk})`; lg.fillRect(0, 0, VW, VH);
     lg.globalCompositeOperation = 'destination-out';
     const L = (x, y, r, s = 1) => { x += ox; y += oy; if (x < -r || y < -r || x > VW + r || y > VH + r) return; const g = lg.createRadialGradient(x, y, 0, x, y, r); g.addColorStop(0, `rgba(0,0,0,${s})`); g.addColorStop(.55, `rgba(0,0,0,${s * .75})`); g.addColorStop(1, 'rgba(0,0,0,0)'); lg.fillStyle = g; lg.fillRect(x - r, y - r, r * 2, r * 2); };
-    if (!P.dead) { const lamp = G.tools.lamp || P.inRover; L(P.x, P.y, lamp ? 75 : 55); L(P.x + Math.cos(P.ang) * (lamp ? 60 : 40), P.y + Math.sin(P.ang) * (lamp ? 60 : 40), lamp ? 55 : 38, .8); }
+    if (UG && !P.dead) { const r = (G.tools.lamp ? 105 : 72) + (G.tools.scanner ? 12 : 0) + (hasRadar() ? 8 : 0); L(P.x, P.y, r); L(P.x + Math.cos(P.ang) * r * .7, P.y + Math.sin(P.ang) * r * .7, r * .6, .7); for (const a of G.allies) if (a.ug) L(a.x, a.y, 30, .6); for (const p of W.pois) { if (!vis(p.x, p.y, 60)) continue; if (p.k === 'exit') L(p.x, p.y, 46, .9); else if (p.k === 'chest' && !p.done) L(p.x, p.y, 22, .55); else if (p.k === 'acid') L(p.x, p.y, p.rad + 10, .5); else if (p.k === 'geyser' && p.ph > 2.8) L(p.x, p.y, 26, .6); } }
+    else if (!P.dead) { const lamp = G.tools.lamp || P.inRover; L(P.x, P.y, lamp ? 75 : 55); L(P.x + Math.cos(P.ang) * (lamp ? 60 : 40), P.y + Math.sin(P.ang) * (lamp ? 60 : 40), lamp ? 55 : 38, .8); }
     for (const m of G.mods) { if (m.type === 'core') L(m.x, m.y, 90); else if (m.type === 'beacon' && m.on) L(m.x, m.y, F.beacon(m.lvl).r); else if (m.type === 'outpost') L(m.x, m.y, 50); else if (TURRETS[m.type] || m.type === 'rocket' || m.type === 'radar' || m.type === 'reactor') L(m.x, m.y, 26, .6); }
     for (const b of bullets) if (b.team !== 'e') L(b.x, b.y, 10, .7);
     for (const f of flames) L(f.x, f.y, 12, .5);
@@ -2587,7 +2865,7 @@ function drawRocket(m, X, Y) {
 }
 function cssToCv(v) { return v * DPR / SC; }
 function drawTargetArrow(ox, oy) {
-  const tg = missionTarget(); if (!tg || P.dead) return;
+  const tg = missionTarget(); if (!tg || P.dead || (UG && !tg.cave)) return;
   const X = tg.x + ox, Y = tg.y + oy, d = Math.round(dist(P.x, P.y, tg.x, tg.y) / TS);
   const top = cssToCv(110), bot = VH - cssToCv(150), left = cssToCv(30), right = VW - cssToCv(30);
   if (X > left && X < right && Y > top && Y < bot) {
@@ -2610,6 +2888,7 @@ function drawBossBar() {
 // ----- mini-carte -----
 const mm = $('mm'), mg = mm.getContext('2d');
 function renderMinimap() {
+  if (UG) return renderCaveMinimap();
   mg.imageSmoothingEnabled = false;
   const S = 150, x0 = clamp(Math.round(P.x / TS - S / 2), 0, MW - S), y0 = clamp(Math.round(P.y / TS - S / 2), 0, MH - S);
   mg.drawImage(W.mmCv, x0, y0, S, S, 0, 0, S, S);
@@ -2617,6 +2896,7 @@ function renderMinimap() {
   if (G.tools.scanner) for (const n of W.nodes) { if (n.a <= 0 || n.t < 4) continue; const x = n.x - x0, y = n.y - y0; if (x < 0 || y < 0 || x >= S || y >= S) continue; mg.fillStyle = NODE_COL[n.t]; mg.fillRect(x, y, 2, 2); }
   W.pois.forEach((p, i) => {
     const x = p.tx - x0, y = p.ty - y0; if (x < -3 || y < -3 || x > S + 3 || y > S + 3) return;
+    if (p.k === 'cave') { if (caveFound(p)) { mg.fillStyle = '#000'; mg.fillRect(x - 3, y - 3, 6, 6); mg.fillStyle = (G.caves[p.id].v ? '#a47148' : '#ff9f1c'); mg.fillRect(x - 2, y - 2, 4, 4); } return; }
     const seen = poiVisible(i) || (G.tools.scanner && p.k !== 'lair');
     if (!seen) return;
     if (p.k === 'nest') { if (!G.pd[i]) { mg.fillStyle = '#c77dff'; mg.fillRect(x - 1, y - 1, 3, 3); } }
@@ -2660,7 +2940,8 @@ function updateHUD() {
   else if (night) clk = `🌙 Nuit ${G.day} · aube dans ${fmt(CYCLE - G.t)}${enemies.length ? ' · 👾 ' + enemies.filter(e => e.wave).length : ''}`;
   else { clk = `☀️ Jour ${G.day} · nuit dans ${fmt(DAY_LEN - G.t)}`; if (G.wave && hasRadar()) clk += ` · 📡 ${G.wave.n} 👾 ${dirName(G.wave.a)}${G.wave.boss ? ' 👑' : ''}`; }
   if (G.ev) clk += G.ev.on ? (G.ev.type === 'storm' ? ' · 🌪️ tempête' : ' · ☄️ météorites') : ' · ⚠️';
-  const tier = tierAt(P.x, P.y); if (tier > 0) clk += ` · ${BIOMES[biomeAt(P.x, P.y)].ic} zone ${TIER_NAME[tier]}`;
+  if (UG) { clk += ` · 🕳️ Grotte ${CAVE_DEPTH[UG.p.tier]}`; if (UG.att) clk += ` · ⚠️ BASE ATTAQUÉE (${UG.att} 👾)`; }
+  const tier = UG ? 0 : tierAt(P.x, P.y); if (tier > 0) clk += ` · ${BIOMES[biomeAt(P.x, P.y)].ic} zone ${TIER_NAME[tier]}`;
   setTxt('clock', clk); $('clock').classList.toggle('night', night); $('clock').classList.toggle('storm', !!(G.ev && G.ev.on));
   // objectif
   const m = MISSIONS[G.mi];
