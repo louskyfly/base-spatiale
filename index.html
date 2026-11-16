@@ -209,7 +209,7 @@ const TIER_NAME = ['calme', 'agité', 'dangereux', 'très dangereux', 'mortel'];
 
 // ---------- Formules (utilisées par le jeu ET par les fiches) ----------
 const F = {
-  coreR: L => 5 + L, coreProd: L => 1 + .5 * L, coreStore: L => 100 + 50 * L, dome: L => 84 + 10 * L,
+  coreR: L => 8 + L, coreProd: L => 1 + .5 * L, coreStore: L => 100 + 50 * L, dome: L => 84 + 10 * L,
   solar: L => 2.5 * L, battery: L => 150 * L, reactor: L => 12 * L, reactorU: L => 45,
   drillT: L => 8 / L, drillBuf: L => 15 * L, store: L => 250 * L,
   o2R: L => 26 * L, o2Ice: L => 45 / (1 + .5 * (L - 1)), serreT: L => 24 / L, beds: L => 2 * L,
@@ -735,10 +735,15 @@ function drillDeposit(cx, cy) { // ressource du gisement le plus riche à côté
   }
   return best;
 }
-function zoneOf(cx, cy) {
-  const R = F.coreR(coreL());
-  if (Math.max(Math.abs(cx - CC), Math.abs(cy - CC)) <= R) return 'core';
-  for (const m of G.mods) if (m.type === 'outpost' && Math.max(Math.abs(cx - m.cx), Math.abs(cy - m.cy)) <= 3) return m;
+function baseZone(cx, cy, skip) { // zone « de base » sans voisinage
+  if (Math.max(Math.abs(cx - CC), Math.abs(cy - CC)) <= F.coreR(coreL())) return 'core';
+  for (const m of G.mods) if (m !== skip && m.type === 'outpost' && Math.max(Math.abs(cx - m.cx), Math.abs(cy - m.cy)) <= 5) return m;
+  return null;
+}
+function zoneOf(cx, cy, skip) {
+  const z = baseZone(cx, cy, skip); if (z) return z;
+  // près (2 cases) de n'importe quel module déjà posé dans une zone
+  for (const m of G.mods) if (m !== skip && m.type !== 'wall' && m.type !== 'wall2' && Math.max(Math.abs(cx - m.cx), Math.abs(cy - m.cy)) <= 2) { const z2 = baseZone(m.cx, m.cy, skip); if (z2) return z2; }
   return null;
 }
 function removeMod(m, silent) {
@@ -939,7 +944,7 @@ addEventListener('pointermove', e => {
     if (d > 12) joy.moved = true;
     if (d > R) { dx *= R / d; dy *= R / d; }
     joy.dx = dx / R; joy.dy = dy / R; setJoyVisual(joy.sx, joy.sy, dx, dy);
-  }
+  } else if (moving && tapStart && tapStart.id === e.pointerId && Math.hypot(e.clientX - tapStart.x, e.clientY - tapStart.y) >= 18) moveDrag(e.clientX, e.clientY);
 });
 function endPointer(e) {
   if (e.pointerId === joy.id) {
@@ -964,7 +969,7 @@ addEventListener('keydown', e => {
   if (e.code === 'KeyE') doContext();
   if (e.code === 'KeyM') openMap();
   if (e.code === 'KeyJ') openJournal();
-  if (e.code === 'Escape') { if (!$('modal').classList.contains('hidden')) closeModal(); else if (buildMode) toggleBuild(); }
+  if (e.code === 'Escape') { if (!$('modal').classList.contains('hidden')) closeModal(); else if (moving) cancelMove('Déplacement annulé'); else if (buildMode) toggleBuild(); }
 });
 addEventListener('keyup', e => { keys[e.code] = false; if (e.code === 'Space') actHeld = false; });
 document.addEventListener('gesturestart', e => e.preventDefault());
@@ -974,6 +979,7 @@ document.addEventListener('contextmenu', e => e.preventDefault());
 
 function worldTap(clx, cly) {
   const w = toWorld(clx, cly), cx = Math.floor(w.x / CELL), cy = Math.floor(w.y / CELL), m = modAt.get(cx + ',' + cy);
+  if (moving) { moveTap(cx, cy); return; }
   if (buildMode && buildSel && !m) { tryPlace(cx, cy); return; }
   if (m) { openModPanel(m); return; }
   if (G.rover && !P.inRover && dist(w.x, w.y, G.rover.x, G.rover.y) < 14) { toast('🚙 Approche-toi du rover et touche « Monter »'); return; }
@@ -988,7 +994,7 @@ function lockReason(type) {
   if (d.flag && !G.flags[d.flag]) return '🔒 Débloqué par la campagne';
   return '';
 }
-function cellOk(cx, cy, type) {
+function cellOk(cx, cy, type, skip) {
   if (cx < 2 || cy < 2 || cx >= CW - 2 || cy >= CW - 2) return 'Bord du monde';
   if (modAt.has(cx + ',' + cy)) return 'Case déjà occupée';
   for (let dy = 0; dy < 2; dy++) for (let dx = 0; dx < 2; dx++) { const i = (cy * 2 + dy) * MW + cx * 2 + dx; if (W.tiles[i] || W.nodeAt[i] >= 0) return 'Il y a un obstacle ici'; }
@@ -999,11 +1005,11 @@ function cellOk(cx, cy, type) {
   if (d.far) {
     const R = F.coreR(coreL());
     if (Math.max(Math.abs(cx - CC), Math.abs(cy - CC)) <= R + 5) return 'Trop près de la base : un avant-poste se pose loin';
-    for (const m of G.mods) if (m.type === 'outpost' && Math.max(Math.abs(cx - m.cx), Math.abs(cy - m.cy)) < 9) return 'Trop près d\'un autre avant-poste';
+    for (const m of G.mods) if (m !== skip && m.type === 'outpost' && Math.max(Math.abs(cx - m.cx), Math.abs(cy - m.cy)) < 9) return 'Trop près d\'un autre avant-poste';
     if (dist(X, Y, P.x, P.y) > 8 * CELL) return 'Approche-toi de l\'endroit choisi';
     return '';
   }
-  const z = zoneOf(cx, cy);
+  const z = zoneOf(cx, cy, skip);
   if (!z) return 'Trop loin de la base (ou d\'un avant-poste)';
   if (CORE_ONLY[type] && z !== 'core') return 'Ce module se construit seulement à la base';
   if (type === 'drill' && drillDeposit(cx, cy) < 0) return 'Pose la foreuse juste à côté d\'un rocher de ressource';
@@ -1023,7 +1029,36 @@ function tryPlace(cx, cy) {
   toast(msg, 1.8); refreshBuildBar(); saveGame(); checkMissionSoon();
   if (d.unique || d.far) { buildSel = null; refreshBuildBar(); }
 }
+// ---------- Déplacer un module ----------
+let moving = null; // { m, tx, ty }
+function startMove(m) {
+  if (buildMode) toggleBuild();
+  moving = { m, tx: null, ty: null };
+  toast('↔ Glisse ou touche une case verte, puis touche-la encore pour confirmer. Touche le module pour annuler.', 4);
+}
+function cancelMove(msg) { if (!moving) return; moving = null; if (msg) toast(msg, 1.5); }
+function moveWhy(cx, cy) { const m = moving.m; if (cx === m.cx && cy === m.cy) return 'C\'est sa place actuelle'; return cellOk(cx, cy, m.type, m); }
+function moveTap(cx, cy) {
+  const m = moving.m;
+  if (!G.mods.includes(m)) { cancelMove(); return; }
+  if (cx === m.cx && cy === m.cy) { cancelMove('Déplacement annulé'); return; }
+  const why = moveWhy(cx, cy);
+  if (why) { toast(why); SFX.err(); moving.tx = null; return; }
+  if (moving.tx === cx && moving.ty === cy) {
+    part(m.x, m.y, '#adb5bd', 12, 40, .5);
+    modAt.delete(m.cx + ',' + m.cy); m.cx = cx; m.cy = cy; m.x = cx * CELL + 16; m.y = cy * CELL + 16; modAt.set(cx + ',' + cy, m);
+    if (m.type === 'drill') m.res = drillDeposit(cx, cy);
+    SFX.build(); part(m.x, m.y, '#ffd166', 16, 50, .6, 1); toast(MODS[m.type].ic + ' ' + MODS[m.type].n + ' déplacé !', 1.6);
+    moving = null; saveGame(); return;
+  }
+  moving.tx = cx; moving.ty = cy; SFX.beep(); toast('Touche encore la case pour confirmer', 1.6);
+}
+function moveDrag(clx, cly) {
+  const w = toWorld(clx, cly), cx = Math.floor(w.x / CELL), cy = Math.floor(w.y / CELL);
+  if (!moveWhy(cx, cy)) { moving.tx = cx; moving.ty = cy; }
+}
 function toggleBuild() {
+  if (moving) cancelMove();
   if (paused && !buildMode) return;
   buildMode = !buildMode; $('btnBuild').classList.toggle('on', buildMode); $('buildWrap').classList.toggle('hidden', !buildMode);
   if (!buildMode) buildSel = null; else { refreshBuildBar(true); if (!buildSel) toast('Choisis un module, puis touche une case verte', 2.6); }
@@ -1164,11 +1199,13 @@ function openModPanel(m) {
   if (m.type === 'rocket' && G.stage >= STAGES.length && !G.flags.launch) h += `<button class="bigbtn gold" id="mLaunch" ${G.surv.includes('lina') ? '' : 'disabled'}>🚀 LANCER LE COMPTE À REBOURS</button>`;
   if (m.lvl < d.max) { const c = upCost(m); h += `<button class="bigbtn green" id="mUp" ${canPay(c) ? '' : 'disabled'}>⬆ Niveau ${m.lvl + 1} : ${costHTML(c)}</button>`; }
   if (m.hp < m.maxHp) { const c = Math.ceil((m.maxHp - m.hp) / 25); h += `<button class="bigbtn" id="mFix">🔧 Réparer 🪨${c}</button>`; }
+  if (m.type !== 'core') h += `<button class="bigbtn" id="mMove">↔ Déplacer</button>`;
   if (m.type !== 'core' && m.type !== 'rocket') h += `<button class="bigbtn red" id="mDel">♻ Démonter</button>`;
   h += `<button class="bigbtn grey" id="mClose">Fermer</button></div>`;
   openModal(h, m.type === 'lab' || m.type === 'workshop');
   const box = $('modalBox'), re = () => openModPanel(m);
   box.querySelector('#mClose').onclick = closeModal;
+  const mv = box.querySelector('#mMove'); if (mv) mv.onclick = () => { closeModal(); startMove(m); };
   const up = box.querySelector('#mUp'); if (up) up.onclick = () => { const c = upCost(m); if (!canPay(c)) return; pay(c); m.lvl++; const r = m.hp / m.maxHp; m.maxHp = Math.round(MODS[m.type].hp * (1 + .6 * (m.lvl - 1))); m.hp = Math.min(m.maxHp, m.maxHp * r + 30); SFX.build(); part(m.x, m.y, '#7ae7ff', 20, 50, .7); toast(d.ic + ' ' + d.n + ' niveau ' + m.lvl + ' !'); saveGame(); checkMissionSoon(); re(); };
   const del = box.querySelector('#mDel'); if (del) del.onclick = () => {
     if (!del._armed) { del._armed = true; del.textContent = '⚠ Sûr ? (rend la moitié)'; return; }
@@ -2107,18 +2144,23 @@ function render() {
     if (m.type === 'shield' && m.on && m.pool > 1) { const s = F.shield(m.lvl); if (!vis(m.x, m.y, s.r)) continue; const f = m.pool / s.pool; ctx.fillStyle = `rgba(100,180,255,${.04 + .06 * f + (m.flash > 0 ? .15 : 0)})`; ctx.beginPath(); ctx.arc(m.x + ox, m.y + oy, s.r, 0, 6.283); ctx.fill(); ctx.strokeStyle = `rgba(160,220,255,${.3 + .4 * f})`; ctx.stroke(); }
   }
   // grille de construction
-  if (buildMode) {
-    const sel = buildSel || 'wall', far = MODS[sel].far;
+  if (buildMode || moving) {
+    const sel = moving ? moving.m.type : (buildSel || 'wall'), far = MODS[sel].far, mvm = moving && moving.m;
     const x0 = Math.floor(cam.x / CELL), y0 = Math.floor(cam.y / CELL), x1 = Math.floor((cam.x + VW) / CELL), y1 = Math.floor((cam.y + VH) / CELL);
     for (let cy = y0; cy <= y1; cy++) for (let cx = x0; cx <= x1; cx++) {
       if (modAt.has(cx + ',' + cy)) continue;
-      const inZone = far ? dist(cx * CELL + 16, cy * CELL + 16, P.x, P.y) < 8 * CELL : !!zoneOf(cx, cy);
+      const inZone = far ? dist(cx * CELL + 16, cy * CELL + 16, P.x, P.y) < 8 * CELL : !!zoneOf(cx, cy, mvm);
       if (!inZone) continue;
-      const X = cx * CELL + ox, Y = cy * CELL + oy, ok = !cellOk(cx, cy, sel);
+      const X = cx * CELL + ox, Y = cy * CELL + oy, ok = !cellOk(cx, cy, sel, mvm);
       if (far && !ok) continue;
-      ctx.strokeStyle = ok ? (buildSel ? 'rgba(128,255,170,0.75)' : 'rgba(255,255,255,0.3)') : 'rgba(255,80,80,0.25)';
+      ctx.strokeStyle = ok ? (buildSel || mvm ? 'rgba(128,255,170,0.75)' : 'rgba(255,255,255,0.3)') : 'rgba(255,80,80,0.25)';
       ctx.strokeRect(X + 1.5, Y + 1.5, CELL - 3, CELL - 3);
-      if (ok && buildSel) { ctx.fillStyle = 'rgba(128,255,170,0.10)'; ctx.fillRect(X + 2, Y + 2, CELL - 4, CELL - 4); }
+      if (ok && (buildSel || mvm)) { ctx.fillStyle = 'rgba(128,255,170,0.10)'; ctx.fillRect(X + 2, Y + 2, CELL - 4, CELL - 4); }
+    }
+    if (mvm) {
+      ctx.strokeStyle = '#ffd166'; ctx.lineWidth = 2; ctx.setLineDash([3, 3]); ctx.strokeRect(mvm.cx * CELL + ox + 1, mvm.cy * CELL + oy + 1, CELL - 2, CELL - 2); ctx.setLineDash([]);
+      if (moving.tx != null) { const X = moving.tx * CELL + ox, Y = moving.ty * CELL + oy; ctx.globalAlpha = .55 + .25 * Math.sin(frame / 6); ctx.fillStyle = '#ffd166'; ctx.fillRect(X + 2, Y + 2, CELL - 4, CELL - 4); ctx.globalAlpha = 1; ctx.font = '18px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(MODS[mvm.type].ic, X + 16, Y + 17); ctx.strokeStyle = '#fff'; ctx.strokeRect(X + 1, Y + 1, CELL - 2, CELL - 2); }
+      ctx.lineWidth = 1;
     }
   }
   // ressources visibles
@@ -2359,7 +2401,7 @@ function showTitle() {
 }
 function startPlay() {
   $('title').classList.add('hidden'); paused = false; started = true; resetJoyVisual(); survPos = [];
-  if (buildMode) toggleBuild(); refreshBuildBar(true); resSig = '';
+  moving = null; if (buildMode) toggleBuild(); refreshBuildBar(true); resSig = '';
   powerTick(1);
   if (G.migrated) { G.migrated = false; setTimeout(() => openModal(`<h2>✨ Base spatiale 2</h2><p>Ta base a été transférée sur une <b>nouvelle planète 6× plus grande</b>, avec 6 biomes, 5 chapitres de missions, 30 modules, des recherches, des survivants à sauver et 4 boss.</p><p>Tes outils et tes ressources sont gardés. La fusée est maintenant l'objectif final de l'aventure : tu as été remboursé de ses réparations.</p><div class="row"><button class="bigbtn green" id="mClose">C'est parti !</button></div>`), 300); setTimeout(() => { const b = $('mClose'); if (b) b.onclick = closeModal; }, 400); }
   else if (G.mi === 0 && G.stats.moved < 5) banner('Chapitre 1', CHAPTERS[0].n, CHAPTERS[0].intro, 4);
