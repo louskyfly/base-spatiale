@@ -152,7 +152,7 @@
 <div id="tr">
   <canvas id="mm" width="150" height="150"></canvas>
   <div id="trb">
-    <button class="sbtn" id="btnGar" title="Garage du robot">🤖</button><button class="sbtn" id="btnJour">📜</button><button class="sbtn" id="btnMap">🗺️</button><button class="sbtn" id="btnPause">⏸</button>
+    <button class="sbtn" id="btnGar" title="Garage du robot">🤖</button><button class="sbtn" id="btnBots" title="Robots alliés">🦾</button><button class="sbtn" id="btnJour">📜</button><button class="sbtn" id="btnMap">🗺️</button><button class="sbtn" id="btnPause">⏸</button>
     <button class="sbtn" id="btnSnd">🔊</button>
   </div>
 </div>
@@ -241,6 +241,7 @@ const F = {
   transport: L => ({ drones: L, cap: 10 * L }),
   lab: L => 1 + .5 * (L - 1),
   rover: L => ({ hp: 250 + 100 * (L - 1), spd: 150 + 20 * (L - 1) }),
+  botfab: L => ({ cap: 2 + 2 * L, heal: 6 + 4 * L }),
 };
 
 // ---------- Modules ----------
@@ -321,6 +322,9 @@ const MODS = {
   repair: { n: 'Station de réparation', ic: '🔧', cat: 'ba', hp: 120, max: 3, cost: { m: 30, c: 6, f: 8 }, use: .5, prio: 7,
     desc: "Ses drones réparateurs volent vers les blocs abîmés dans son rayon et les réparent tout seuls (avec de l'énergie et un peu de ferraille). Niveau 3 : soigne aussi ton robot.",
     st: L => { const s = F.repair(L); return [`${s.drones} drone(s) réparateur(s)`, `Rayon ${s.r / CELL | 0} cases`, `Répare ${s.rate} PV/s par drone`, '1 🔩 tous les 60 PV (sinon 2 🪨)', '1 ⚡/s par drone au travail']; } },
+  botfab: { n: 'Usine à robots', ic: '🦾', cat: 'ba', hp: 150, max: 3, cost: { m: 35, f: 8, c: 6 }, use: .5, prio: 3, unique: true,
+    desc: "Fabrique de petits robots alliés : soldats, mineurs, gardiens et réparateurs. Donne-leur des ordres avec le bouton 🦾 Robots. Les robots abîmés reviennent ici se soigner.",
+    st: L => { const s = F.botfab(L); return [`Effectif max ${s.cap} robots (+1 par quartiers, 12 max)`, `Soigne ${s.heal} PV/s`, 'Consomme 0,5 ⚡/s']; } },
   radar: { n: 'Radar', ic: '📡', cat: 'ba', hp: 60, max: 3, cost: { m: 15, c: 4 }, use: 1, prio: 4,
     desc: "Révèle la carte autour de la base, montre les créatures sur la mini-carte et annonce chaque vague : nombre, direction, boss, météorites.",
     st: L => [`Révèle ${F.radar(L).reveal * EXP * 2} m autour`, 'Annonce les vagues et leur direction', 'Créatures visibles sur la carte', 'Consomme 1 ⚡/s'] },
@@ -340,6 +344,16 @@ const MODS = {
     desc: "Ta fusée pour rentrer avec ton équipage. Répare-la en 7 étapes, puis défends-la pendant le compte à rebours !",
     st: L => ['7 étapes de réparation', 'Compte à rebours final : 90 s'] },
 };
+// ---------- Robots alliés ----------
+const BOTS = {
+  sol: { n: 'Soldat', ic: '💂', hp: 40, spd: 92, cost: { m: 15, c: 3 }, range: 115, dmg: 1.6, rate: .55, acc: '#e63946', desc: 'Te suit et tire sur les créatures proches.' },
+  min: { n: 'Mineur', ic: '⛏️', hp: 30, spd: 80, cost: { m: 12, f: 2 }, mine: 1.1, cap: 6, acc: '#ffd166', desc: 'Va miner le gisement le plus proche de la base et rapporte au stock.' },
+  gar: { n: 'Gardien', ic: '🛡️', hp: 70, spd: 70, cost: { m: 20, f: 3, c: 2 }, range: 135, dmg: 2.6, rate: .85, acc: '#4cc9f0', desc: 'Patrouille près de la base et des tourelles la nuit.' },
+  rep: { n: 'Réparateur', ic: '🔧', hp: 35, spd: 85, cost: { m: 15, f: 4, g: 3 }, heal: 6, acc: '#80ffaa', desc: 'Répare les modules, les robots et toi autour de lui.' },
+};
+const BOT_ORDER = ['sol', 'min', 'gar', 'rep'];
+const BOT_ORD = { follow: '🚶 Me suivre', guard: '🏠 Garder la base', mine: '⛏️ Miner' };
+const BOT_MAX = 12;
 const CATS = [['en', '⚡ Énergie'], ['pr', '🏭 Production'], ['df', '🛡️ Défense'], ['ba', '🏠 Base']];
 const BLOCKING = { wall: 1, wall2: 1 }; // bloquent le robot
 const TURRETS = { turret: 1, cannon: 1, flamer: 1, mortar: 1, tesla: 1 };
@@ -549,6 +563,7 @@ function buildSprites() {
     outpost: mk(32, 32, g => { plate(g, '#3d405b', '#22223b'); circ(g, 16, 18, 8, '#6c757d'); circ(g, 16, 18, 6, '#4cc9f0'); px(g, '#e9ecef', 15, 2, 2, 16); px(g, '#e63946', 17, 2, 9, 6); px(g, '#ffd166', 19, 4, 3, 2); }),
     teleporter: mk(32, 32, g => { plate(g, '#240046', '#10002b'); circ(g, 16, 16, 12, '#5a189a'); ring(g, 16, 16, 11, '#c77dff'); ring(g, 16, 16, 8, '#e0aaff'); circ(g, 16, 16, 5, '#7b2cbf'); circ(g, 16, 16, 2, '#fff'); }),
     antenna: mk(32, 32, g => { plate(g, '#495057', '#212529'); circ(g, 16, 16, 11, '#adb5bd'); circ(g, 16, 16, 9, '#e9ecef'); circ(g, 16, 16, 5, '#ced4da'); px(g, '#495057', 15, 6, 2, 20); px(g, '#495057', 6, 15, 20, 2); circ(g, 16, 16, 2, '#e63946'); }),
+    botfab: mk(32, 32, g => { plate(g, '#3d405b', '#22223b'); px(g, '#212529', 6, 6, 20, 16); px(g, '#495057', 7, 7, 18, 14); px(g, '#ffd166', 6, 22, 20, 2); for (let i = 0; i < 5; i++) px(g, '#212529', 7 + i * 4, 22, 2, 2); px(g, '#f4a300', 12, 10, 8, 8); px(g, '#1b1b2f', 13, 12, 6, 2); px(g, '#4cc9f0', 13, 12, 1, 1); px(g, '#4cc9f0', 18, 12, 1, 1); px(g, '#adb5bd', 4, 4, 4, 2); px(g, '#adb5bd', 24, 4, 4, 2); px(g, '#e63946', 15, 3, 2, 2); }),
     rocket: mk(32, 48, g => { px(g, '#343a40', 2, 38, 28, 8); px(g, '#495057', 4, 36, 24, 2); px(g, '#ced4da', 11, 8, 10, 30); px(g, '#f8f9fa', 12, 8, 4, 30); circ(g, 16, 8, 5, '#ced4da'); px(g, '#e63946', 13, 1, 6, 5); circ(g, 16, 17, 3, '#4cc9f0'); px(g, '#e63946', 6, 28, 5, 10); px(g, '#e63946', 21, 28, 5, 10); px(g, '#6c757d', 13, 38, 6, 3); }),
   };
 }
@@ -714,7 +729,7 @@ function newStats() { return { moved: 0, got: zeroRes(), made: zeroRes(), kills:
 function freshG(seed) {
   return { v: 2, seed, res: zeroRes(), seen: { m: 1, c: 1, g: 1, f: 1 }, day: 1, t: 15, baseE: 50, tools: {}, stats: newStats(), mi: 0, ms: null, side: [],
     research: { done: {}, cur: null }, surv: [], known: {}, pd: {}, nestHp: {}, ant: 0, stage: 0, rover: null, flags: {},
-    explored: new Uint8Array(EW * EW), mods: [], toSpawn: 0, spawnT: 0, nightStarted: false, wave: null, nextQueen: 0, ev: null, evDay: 0, extra: [], lostMods: 0, look: defLook() };
+    explored: new Uint8Array(EW * EW), mods: [], toSpawn: 0, spawnT: 0, nightStarted: false, wave: null, nextQueen: 0, ev: null, evDay: 0, extra: [], lostMods: 0, look: defLook(), allies: [], aord: defAord() };
 }
 function hasTech(id) { return !id || !!G.research.done[id]; }
 function count(type) { let n = 0; for (const m of G.mods) if (m.type === type) n++; return n; }
@@ -780,7 +795,8 @@ function saveGame() {
     const rocks = []; if (W.minedMark) for (let i = 0; i < W.minedMark.length; i++) if (W.minedMark[i]) rocks.push(i);
     let exp = ''; for (let i = 0; i < G.explored.length; i++) exp += G.explored[i] ? '1' : '0';
     const data = { v: 2, seed: G.seed, res: G.res, seen: G.seen, day: G.day, t: Math.round(G.t * 10) / 10, baseE: Math.round(G.baseE), tools: G.tools, stats: G.stats, mi: G.mi, ms: G.ms, side: G.side,
-      research: G.research, surv: G.surv, known: G.known, pd: G.pd, nestHp: G.nestHp, ant: G.ant, stage: G.stage, rover: G.rover, flags: G.flags, nextQueen: G.nextQueen, evDay: G.evDay, extra: G.extra, lostMods: G.lostMods, look: G.look,
+      research: G.research, surv: G.surv, known: G.known, pd: G.pd, nestHp: G.nestHp, ant: G.ant, stage: G.stage, rover: G.rover, flags: G.flags, nextQueen: G.nextQueen, evDay: G.evDay, extra: G.extra, lostMods: G.lostMods, look: G.look, mv: 2, aord: G.aord,
+      allies: (G.allies || []).map(a => [a.k, Math.round(a.x), Math.round(a.y), Math.round(a.hp)]),
       p: { x: Math.round(P.x), y: Math.round(P.y), hp: Math.round(P.hp), en: Math.round(P.en), o2: Math.round(P.o2), inRover: P.inRover },
       mods: G.mods.map(m => [m.type, m.cx, m.cy, m.lvl, Math.round(m.hp), Math.round(m.buf || 0), m.rec || 0]),
       nodes: W.nodes.map(n => n.a), rocks, exp };
@@ -809,6 +825,8 @@ function loadGame() {
     resetRuntime();
     for (const [type, cx, cy, lvl, hp, buf, rec] of d.mods) if (MODS[type]) { const m = addMod(type, cx, cy, Math.min(lvl, MODS[type].max), hp); m.buf = buf || 0; m.rec = rec || 0; }
     if (!core()) addMod('core', CC, CC);
+    G.aord = Object.assign(defAord(), d.aord); G.allies = (d.allies || []).filter(a => Array.isArray(a) && BOTS[a[0]]).slice(0, BOT_MAX).map(([k, x, y, hp]) => newAlly(k, +x || CORE_X, +y || CORE_Y, Math.max(1, Math.min(+hp || 1, botMaxHp(k)))));
+    if (!d.mv && G.mi >= BOT_MI) G.mi += 2; // missions robots insérées dans le chapitre 2
     Object.assign(P, d.p, { dead: false, inv: 0, cd: 0, chill: 0 });
     if (P.inRover && !G.rover) P.inRover = false;
     if (G.nightStarted) { G.toSpawn = 2 + 2 * waveDiff(); G.spawnT = 3; planWave(); }
@@ -1133,6 +1151,7 @@ function modStatus(m) {
     case 'refinery': { const r = RECIPES[m.rec || 0]; s.push([`Recette : ${r.ic} ${r.n}`, '']); if (!canPay(r.in)) s.push(['Il manque : ' + costTxt(r.in), 'bad']); break; }
     case 'lab': { const c = G.research.cur; s.push(c ? [`Recherche : ${TECHS.find(t => t.id === c.id).n} ${Math.floor(c.p / TECHS.find(t => t.id === c.id).t * 100)} %`, 'ok'] : ['Aucune recherche en cours', 'bad']); break; }
     case 'shield': s.push([`Réserve ${Math.floor(m.pool)}/${F.shield(m.lvl).pool}`, '']); break;
+    case 'botfab': s.push([`${G.allies.length}/${botCap()} robots alliés`, G.allies.length ? 'ok' : '']); break;
     case 'repair': { const n = rdrones.filter(r => r.home === m && r.tgt).length; s.push([`${n} drone(s) au travail`, n ? 'ok' : '']); break; }
     case 'reactor': s.push(G.res.u > 0 ? ['☢️ uranium OK', 'ok'] : ['☢️ Plus d\'uranium !', 'bad']); break;
     case 'habitat': s.push([`Survivants ${G.surv.length} / lits ${bedsTotal()}`, G.surv.length > bedsTotal() ? 'bad' : '']); break;
@@ -1209,6 +1228,7 @@ function openModPanel(m) {
   if (m.type === 'rocket' && G.stage >= STAGES.length && !G.flags.launch) h += `<button class="bigbtn gold" id="mLaunch" ${G.surv.includes('lina') ? '' : 'disabled'}>🚀 LANCER LE COMPTE À REBOURS</button>`;
   if (m.lvl < d.max) { const c = upCost(m); h += `<button class="bigbtn green" id="mUp" ${canPay(c) ? '' : 'disabled'}>⬆ Niveau ${m.lvl + 1} : ${costHTML(c)}</button>`; }
   if (m.hp < m.maxHp) { const c = Math.ceil((m.maxHp - m.hp) / 25); h += `<button class="bigbtn" id="mFix">🔧 Réparer 🪨${c}</button>`; }
+  if (m.type === 'botfab') h += `<button class="bigbtn green" id="mBots">🦾 Robots</button>`;
   if (m.type === 'core') h += `<button class="bigbtn" id="mGar">🤖 Garage du robot</button>`;
   if (m.type !== 'core') h += `<button class="bigbtn" id="mMove">↔ Déplacer</button>`;
   if (m.type !== 'core' && m.type !== 'rocket') h += `<button class="bigbtn red" id="mDel">♻ Démonter</button>`;
@@ -1217,6 +1237,7 @@ function openModPanel(m) {
   const box = $('modalBox'), re = () => openModPanel(m);
   box.querySelector('#mClose').onclick = closeModal;
   const ga = box.querySelector('#mGar'); if (ga) ga.onclick = () => { closeModal(); openGarage(); };
+  const mb = box.querySelector('#mBots'); if (mb) mb.onclick = () => openBots();
   const mv = box.querySelector('#mMove'); if (mv) mv.onclick = () => { closeModal(); startMove(m); };
   const up = box.querySelector('#mUp'); if (up) up.onclick = () => { const c = upCost(m); if (!canPay(c)) return; pay(c); m.lvl++; const r = m.hp / m.maxHp; m.maxHp = Math.round(MODS[m.type].hp * (1 + .6 * (m.lvl - 1))); m.hp = Math.min(m.maxHp, m.maxHp * r + 30); SFX.build(); part(m.x, m.y, '#7ae7ff', 20, 50, .7); toast(d.ic + ' ' + d.n + ' niveau ' + m.lvl + ' !'); saveGame(); checkMissionSoon(); re(); };
   const del = box.querySelector('#mDel'); if (del) del.onclick = () => {
@@ -1430,6 +1451,8 @@ const MISSIONS = [
   { ch: 1, n: 'Épaves de l\'équipage', d: 'Fouille 2 📦 épaves de ta fusée (suis la flèche 🎯). Elles cachent ferraille et journaux de bord.', p: () => [Math.min(S().wrecks, 2), 2], rw: { f: 10 }, start: () => { for (let k = 0; k < 3; k++) { const i = nearestPoiExcept('wreck'); if (i == null) break; reveal(i); } }, tg: () => poiXY(nearestPoi('wreck', true)) },
   { ch: 1, n: 'Signal de détresse', d: 'Une capsule de survie émet dans la plaine violette ! Va l\'ouvrir pour sauver Zoé.', p: () => B(G.surv.includes('zoe')), rw: { k: 10 }, start: () => reveal(poiIdx('pod', 'zoe')), tg: () => poiXY(poiIdx('pod', 'zoe')) },
   { ch: 1, n: 'Loger Zoé', d: 'Construis des 🏘️ quartiers et une 🌱 serre : chaque survivant veut un lit et 1 🥕 par jour.', p: () => [Math.min(count('habitat'), 1) + Math.min(count('serre'), 1), 2], rw: { n: 5, m: 20 } },
+  { ch: 1, n: 'Usine à robots', d: 'Construis l\'🦾 usine à robots (onglet 🏠 Base) puis fabrique ton premier robot allié avec le bouton 🦾.', p: () => [(count('botfab') ? 1 : 0) + Math.min(G.allies.length, 1), 2], rw: { m: 20, c: 5 } },
+  { ch: 1, n: 'Escouade', d: 'Aie 3 robots alliés en même temps. Essaie un ⛏️ mineur : il rapporte du minerai tout seul !', p: () => [Math.min(G.allies.length, 3), 3], rw: { f: 8, k: 5 } },
   { ch: 1, n: 'Nids de créatures', d: 'Détruis 2 🕳️ nids. Moins de nids autour = des nuits plus calmes.', p: () => [Math.min(S().nests, 2), 2], rw: { c: 10, f: 5 }, start: () => reveal(nearestPoi('nest')), tg: () => poiXY(nearestPoi('nest')) },
   { ch: 1, n: 'La Reine des sables', d: 'Elle attaquera ta base la nuit prochaine. Renforce tes défenses et vaincs-la !', p: () => B(S().bosses.queen), rw: { c: 15, k: 15 }, start: () => { G.flags.queenDue = 1; } },
   // Chapitre 3
@@ -1521,6 +1544,166 @@ function completeSide(i) {
   const s = G.side[i]; addRes(s.rw); G.stats.sideDone++; SFX.mission();
   toast('⭐ Mission secondaire : ' + s.n + '  🎁 ' + costTxt(s.rw), 3.2);
   G.side[i] = genOneSide(G.side.map(x => x.tpl)); saveGame();
+}
+
+const BOT_MI = MISSIONS.findIndex(m => m.n === 'Usine à robots');
+
+// ---------- Robots alliés (usine à robots) ----------
+function defAord() { return { sol: 'follow', min: 'mine', gar: 'guard', rep: 'follow' }; }
+function botFab() { return G.mods.find(m => m.type === 'botfab'); }
+function botCap() { const f = botFab(); return f ? Math.min(BOT_MAX, F.botfab(f.lvl).cap + count('habitat')) : 0; }
+function botMaxHp(k) { const f = botFab(); return Math.round(BOTS[k].hp * (1 + .25 * ((f ? f.lvl : 1) - 1))); }
+function newAlly(k, x, y, hp) { return { ally: 1, k, x, y, hp: hp == null ? botMaxHp(k) : hp, cd: 0, st: '', load: 0, lres: null, node: -1, rt: 0, stuck: 0, ang: -Math.PI / 2, hit: 0, a: Math.random() * 6.283, fx: 0 }; }
+function makeBot(k) {
+  const f = botFab(); if (!f) { toast('🦾 Construis d\'abord une usine à robots'); SFX.err(); return false; }
+  if (G.allies.length >= botCap()) { toast('🦾 Effectif max atteint : améliore l\'usine ou construis des quartiers'); SFX.err(); return false; }
+  if (!canPay(BOTS[k].cost)) { SFX.err(); return false; }
+  pay(BOTS[k].cost); const a = newAlly(k, f.x, f.y + 22); G.allies.push(a); G.stats.bots = (G.stats.bots || 0) + 1;
+  part(a.x, a.y, BOTS[k].acc, 16, 50, .6); SFX.build(); toast(BOTS[k].ic + ' ' + BOTS[k].n + ' fabriqué !', 1.8); saveGame(); return a;
+}
+function nearestAlly(x, y, r) { let best = null, bd = r; for (const a of G.allies) { const d = dist(x, y, a.x, a.y); if (d < bd) { bd = d; best = a; } } return best; }
+function hurtAlly(a, d) {
+  a.hp -= d; a.hit = .15; part(a.x, a.y, '#ffd166', 2, 25, .25);
+  if (a.hp <= 0) { const i = G.allies.indexOf(a); if (i >= 0) G.allies.splice(i, 1); boom(a.x, a.y, BOTS[a.k].acc, 14); toast('💥 ' + BOTS[a.k].n + ' détruit !', 2); }
+}
+function botMove(a, tx, ty, spd, dt, near = 4) {
+  const dx = tx - a.x, dy = ty - a.y, d = Math.hypot(dx, dy); if (d <= near) return true;
+  const v = Math.min(d - near + .1, spd * dt), mx = dx / d * v, my = dy / d * v; a.ang = Math.atan2(dy, dx);
+  if (a.stuck > .6 || d > 900) { a.x += mx; a.y += my; a.stuck = Math.max(0, a.stuck - dt * .5); return false; } // survole les obstacles s'il est coincé
+  const r = moveEnt(a, mx, my, 4, 'free'); if (r.blocked) a.stuck += dt; else a.stuck = Math.max(0, a.stuck - dt);
+  return false;
+}
+function botMineNode(a) {
+  const base = botFab() || core(); if (!base) return -1;
+  let best = -1, bd = 70 * TS; const lim = drillMul();
+  for (let k = 0; k < W.nodes.length; k++) {
+    const n = W.nodes[k]; if (n.a <= 0 || NODE_NEED[n.t] > lim || W.nodeAt[n.y * MW + n.x] !== k) continue;
+    const d = dist(n.x * TS + 8, n.y * TS + 8, base.x, base.y); if (d >= bd) continue;
+    let users = 0; for (const o of G.allies) if (o !== a && o.node === k) users++; if (users >= 2) continue;
+    bd = d; best = k;
+  }
+  return best;
+}
+function botShoot(a, B, dt) {
+  a.cd -= dt; if (!B.range) return null;
+  const e = nearestEnemy(a.x, a.y, B.range); if (!e) return null;
+  if (a.cd <= 0) {
+    a.cd = B.rate; const ang = Math.atan2(e.y - a.y, e.x - a.x); a.ang = ang;
+    bullets.push({ x: a.x + Math.cos(ang) * 5, y: a.y + Math.sin(ang) * 5, vx: Math.cos(ang) * 230, vy: Math.sin(ang) * 230, life: B.range / 230 + .1, dmg: B.dmg * (survActive('kenji') ? 1.25 : 1), team: 'a', col: B.acc, s: 2 });
+    tone(900, .05, 'square', .015, -300);
+  }
+  return e;
+}
+function guardPoint(a, i, night) {
+  const f = botFab(), c = core() || { x: CORE_X, y: CORE_Y };
+  if (night) { const pts = G.mods.filter(m => TURRETS[m.type] && zoneOf(m.cx, m.cy) === 'core'); pts.push(c); const p = pts[i % pts.length]; return { x: p.x + Math.cos(a.a) * 30, y: p.y + Math.sin(a.a) * 30 }; }
+  const h = f || c; return { x: h.x + Math.cos(a.a + i) * 40, y: h.y + 26 + Math.sin(a.a + i) * 20 };
+}
+let botSaveT = 0;
+function updateBots(dt) {
+  if (!G.allies || !G.allies.length) return;
+  const f = botFab(), night = isNight(), cnt = { follow: 0, guard: 0 };
+  for (let i = G.allies.length - 1; i >= 0; i--) {
+    const a = G.allies[i], B = BOTS[a.k], mh = botMaxHp(a.k), ord = G.aord[a.k] || 'follow', spd = B.spd;
+    if (a.hit > 0) a.hit -= dt;
+    a.a += dt * .6; a.fx = 0;
+    // soin / retraite à l'usine
+    if (f && a.hp < mh * .35 && a.st !== 'heal') { a.st = 'heal'; if (a.load > 0) a.st = 'heal'; }
+    if (a.st === 'heal') {
+      if (!f) { a.st = ''; }
+      else if (botMove(a, f.x, f.y + 20, spd * 1.2, dt, 10)) { if (f.on) { a.hp = Math.min(mh, a.hp + F.botfab(f.lvl).heal * dt); if (Math.random() < .15) part(a.x, a.y - 4, '#80ffaa', 1, 15, .3); } if (a.hp >= mh) a.st = ''; }
+      botShoot(a, B, dt); continue;
+    }
+    // réparateur : soigne ce qui est abîmé autour de lui
+    if (B.heal) {
+      let tg = null, tf = .98;
+      if (!P.dead && dist(a.x, a.y, P.x, P.y) < 70 && P.hp / maxHp() < tf) { tf = P.hp / maxHp(); tg = P; }
+      for (const o of G.allies) if (o !== a && dist(a.x, a.y, o.x, o.y) < 70 && o.hp / botMaxHp(o.k) < tf) { tf = o.hp / botMaxHp(o.k); tg = o; }
+      for (const m of G.mods) if (m.hp < m.maxHp && Math.abs(m.x - a.x) < 70 && Math.abs(m.y - a.y) < 70 && m.hp / m.maxHp < tf) { tf = m.hp / m.maxHp; tg = m; }
+      if (tg) { const amt = B.heal * dt; if (tg === P) P.hp = Math.min(maxHp(), P.hp + amt); else if (tg.ally) tg.hp = Math.min(botMaxHp(tg.k), tg.hp + amt); else tg.hp = Math.min(tg.maxHp, tg.hp + amt * 2); a.fx = tg; }
+    }
+    // ordres
+    if (ord === 'mine') {
+      const base = f || core(); if (!base) continue;
+      const cap = B.cap || 3;
+      if (a.load >= cap || (a.load > 0 && a.node < 0)) { if (botMove(a, base.x, base.y + 20, spd, dt, 14)) { const add = gain(a.lres, a.load, a.x, a.y, true); a.load = 0; if (!add) a.load = 0; a.node = -1; } botShoot(a, B, dt); continue; }
+      a.rt -= dt;
+      if (a.node < 0 || W.nodeAt[W.nodes[a.node].y * MW + W.nodes[a.node].x] !== a.node) { a.node = -1; if (a.rt <= 0) { a.rt = 2; a.node = botMineNode(a); } }
+      if (a.node < 0) { botMove(a, base.x + Math.cos(a.a) * 30, base.y + 30, spd, dt); continue; }
+      const n = W.nodes[a.node], nx = n.x * TS + 8, ny = n.y * TS + 8;
+      if (botMove(a, nx, ny, spd, dt, 11)) {
+        a.ang = Math.atan2(ny - a.y, nx - a.x); a.cd -= dt;
+        if (a.cd <= 0) {
+          a.cd = B.mine ? 1 / B.mine : 2.4; const k = NODE_RES[n.t]; if (a.lres !== k) { a.load = 0; a.lres = k; }
+          a.load++; n.a--; if (n.extra) n.extra.a = n.a; part(nx, ny, NODE_COL[n.t], 4, 35, .35); if (dist(a.x, a.y, P.x, P.y) < 200) tone(160, .04, 'square', .012, -60);
+          if (n.a <= 0) { W.nodeAt[n.y * MW + n.x] = -1; part(nx, ny, NODE_COL[n.t], 12, 55, .5, 2); if (n.extra) G.extra = G.extra.filter(e => e !== n.extra); a.node = -1; }
+        }
+      }
+      continue;
+    }
+    const e = botShoot(a, B, dt);
+    if (ord === 'follow' && !P.dead) {
+      const j = cnt.follow++, ang = P.ang + Math.PI + (j % 2 ? 1 : -1) * (.5 + .35 * (j >> 1)), r = 24 + 6 * (j >> 1);
+      const tx = P.x + Math.cos(ang) * r, ty = P.y + Math.sin(ang) * r;
+      if (dist(a.x, a.y, P.x, P.y) > 700) { a.x = tx; a.y = ty; }
+      if (e && B.range && dist(a.x, a.y, P.x, P.y) < 140 && dist(a.x, a.y, e.x, e.y) > B.range * .8) botMove(a, e.x, e.y, spd, dt, B.range * .6);
+      else botMove(a, tx, ty, spd * (dist(a.x, a.y, tx, ty) > 80 ? 1.4 : 1), dt, 6);
+    } else {
+      const j = cnt.guard++, g = guardPoint(a, j, night);
+      const e2 = B.range ? nearestEnemy(g.x, g.y, 170) : null;
+      if (e2 && dist(a.x, a.y, e2.x, e2.y) > B.range * .8) botMove(a, e2.x, e2.y, spd, dt, B.range * .6);
+      else botMove(a, g.x, g.y, spd * (night ? 1 : .6), dt, 5);
+    }
+  }
+  botSaveT += dt;
+}
+// ----- affichage -----
+const botSprCache = {};
+function botSprite(k) {
+  const L = curLook(), sk = L.skin ? SKINS.find(s => s.id === L.skin) : null;
+  const B = sk ? sk.b : BODY_COLS[L.body][1], key = k + B;
+  if (botSprCache[key]) return botSprCache[key];
+  const D = shade(B, -.55), H = shade(B, .4), A = BOTS[k].acc, K = '#1b1b2f';
+  return botSprCache[key] = mk(12, 12, g => {
+    px(g, K, 1, 3, 2, 7); px(g, K, 9, 3, 2, 7); // chenilles
+    px(g, D, 2, 2, 8, 9); px(g, B, 3, 3, 6, 7); px(g, H, 3, 3, 6, 1);
+    px(g, '#1b1b2f', 4, 4, 4, 2); px(g, A, 4, 4, 1, 1); px(g, A, 7, 4, 1, 1); // visière
+    if (k === 'sol') { px(g, '#495057', 9, 0, 2, 5); px(g, A, 9, 0, 2, 1); px(g, A, 4, 7, 4, 2); }
+    if (k === 'min') { px(g, A, 3, 1, 6, 2); px(g, '#fff3b0', 5, 1, 2, 1); px(g, '#adb5bd', 0, 0, 2, 4); px(g, '#6c757d', 0, 0, 3, 1); }
+    if (k === 'gar') { px(g, A, 1, 6, 10, 2); px(g, '#ffffff', 5, 6, 2, 2); px(g, '#495057', 5, 0, 2, 3); }
+    if (k === 'rep') { px(g, '#ffffff', 4, 7, 4, 2); px(g, '#ffffff', 5, 6, 2, 4); px(g, A, 5, 7, 2, 2); px(g, A, 5, 0, 2, 2); }
+  });
+}
+function drawAllies(ox, oy, vis) {
+  if (!G.allies) return;
+  for (const a of G.allies) {
+    if (!vis(a.x, a.y)) continue;
+    if (a.fx) { const T = a.fx; ctx.strokeStyle = frame % 4 < 2 ? '#80ffaa' : '#d8f3dc'; ctx.beginPath(); ctx.moveTo(a.x + ox, a.y + oy); ctx.lineTo(T.x + ox + rnd(-3, 3), T.y + oy + rnd(-3, 3)); ctx.stroke(); }
+    ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.fillRect(Math.round(a.x + ox - 4), Math.round(a.y + oy + 5), 8, 2);
+    ctx.save(); ctx.translate(Math.round(a.x + ox), Math.round(a.y + oy)); ctx.rotate(a.ang + Math.PI / 2);
+    if (a.hit > 0) ctx.globalAlpha = .5; ctx.drawImage(botSprite(a.k), -6, -6); ctx.restore();
+    const mh = botMaxHp(a.k);
+    if (a.hp < mh) { ctx.fillStyle = '#000a'; ctx.fillRect(Math.round(a.x + ox - 6), Math.round(a.y + oy - 10), 12, 2); ctx.fillStyle = a.hp < mh * .35 ? '#ff4d6d' : '#80ffaa'; ctx.fillRect(Math.round(a.x + ox - 6), Math.round(a.y + oy - 10), Math.round(12 * a.hp / mh), 2); }
+    if (a.load > 0) { ctx.fillStyle = RN[a.lres] ? RN[a.lres][2] : '#fff'; ctx.fillRect(Math.round(a.x + ox - 2), Math.round(a.y + oy + 6), 4, 3); }
+  }
+}
+// ----- panneau Robots -----
+function openBots() {
+  const f = botFab(), cap = botCap();
+  let h = `<h2>🦾 Robots alliés <small style="opacity:.7">${G.allies.length}/${cap || '—'}</small></h2>`;
+  if (!f) h += '<p class="no">Construis une 🦾 <b>usine à robots</b> (onglet 🏠 Base) pour fabriquer des robots alliés.</p>';
+  else h += `<p>Effectif max : ${cap} (usine niv. ${f.lvl} : ${F.botfab(f.lvl).cap}, +1 par quartiers, 12 max). Les robots abîmés reviennent à l'usine se soigner.</p>`;
+  for (const k of BOT_ORDER) {
+    const B = BOTS[k], n = G.allies.filter(a => a.k === k).length, ord = G.aord[k];
+    h += `<div class="tool"><span class="ic">${B.ic}</span><div class="tx"><b>${B.n}</b> × ${n} · ❤️ ${botMaxHp(k)}<br>${B.desc}<div class="row" style="margin-top:4px">`;
+    for (const o in BOT_ORD) h += `<button data-bord="${k}:${o}" style="font-size:12px;padding:4px 6px;${ord === o ? 'background:#2a9d8f;color:#fff' : ''}">${BOT_ORD[o]}</button>`;
+    h += `</div></div><button data-bot="${k}" ${f && G.allies.length < cap && canPay(B.cost) ? '' : 'disabled'}>Fabriquer<br>${costHTML(B.cost)}</button></div>`;
+  }
+  h += '<div class="row"><button class="bigbtn grey" id="mClose">Fermer</button></div>';
+  openModal(h, true); const box = $('modalBox');
+  box.querySelector('#mClose').onclick = closeModal;
+  box.querySelectorAll('[data-bot]').forEach(b => b.onclick = () => { if (makeBot(b.dataset.bot)) openBots(); });
+  box.querySelectorAll('[data-bord]').forEach(b => b.onclick = () => { const [k, o] = b.dataset.bord.split(':'); G.aord[k] = o; for (const a of G.allies) if (a.k === k) { a.node = -1; a.rt = 0; } SFX.beep(); saveGame(); openBots(); });
 }
 
 // ---------- Mise à jour ----------
@@ -1773,6 +1956,7 @@ function update(dt) {
   // ----- modules -----
   updateModules(dt, dk);
   updateDrones(dt);
+  updateBots(dt);
   // ----- joueur -----
   updatePlayer(dt);
   // ----- ennemis -----
@@ -2095,7 +2279,9 @@ function updateEnemies(dt) {
     if (e.rt <= 0 || !e.tgt || (e.tgt !== P && e.tgt.hp != null && e.tgt.hp <= 0)) {
       e.rt = .8; e.tgt = null;
       const pd = P.dead ? 1e9 : dist(e.x, e.y, P.x, P.y);
-      if (pd < (e.wave ? 140 : d.boss ? 400 : 260)) e.tgt = P;
+      const al = G.allies.length ? nearestAlly(e.x, e.y, Math.min(pd - 20, e.wave ? 110 : 150)) : null;
+      if (al) e.tgt = al;
+      else if (pd < (e.wave ? 140 : d.boss ? 400 : 260)) e.tgt = P;
       else {
         let best = null, bd = e.wave ? 1e9 : 140;
         for (const m of G.mods) { if (MODS[m.type].walk) continue; const dd = dist(e.x, e.y, m.x, m.y) + (BLOCKING[m.type] || m.type === 'gate' ? 60 : 0); if (dd < bd) { bd = dd; best = m; } }
@@ -2103,7 +2289,7 @@ function updateEnemies(dt) {
       }
     }
     let T = e.tgt;
-    if (T && T !== P && !G.mods.includes(T)) { e.tgt = null; T = null; }
+    if (T && T !== P && !(T.ally ? G.allies.includes(T) : G.mods.includes(T))) { e.tgt = null; T = null; }
     if (T === P && P.dead) T = null;
     let mvx = 0, mvy = 0;
     if (!T) {
@@ -2111,7 +2297,7 @@ function updateEnemies(dt) {
       else { const hx = e.nest != null ? W.pois[e.nest].x : e.lair != null ? W.pois[e.lair].x : e.hx, hy = e.nest != null ? W.pois[e.nest].y : e.lair != null ? W.pois[e.lair].y : e.hy; if (dist(e.x, e.y, hx, hy) > 40) { mvx = hx - e.x; mvy = hy - e.y; } else { e.wob += dt; mvx = Math.cos(e.wob); mvy = Math.sin(e.wob * 1.3); } }
       const l = Math.hypot(mvx, mvy) || 1; mvx /= l; mvy /= l;
     } else {
-      const dx = T.x - e.x, dy = T.y - e.y, dd = Math.hypot(dx, dy) || 1, reach = e.r + (T === P ? 6 : 16);
+      const dx = T.x - e.x, dy = T.y - e.y, dd = Math.hypot(dx, dy) || 1, reach = e.r + (T === P || T.ally ? 6 : 16);
       e.cd -= dt; mvx = dx / dd; mvy = dy / dd;
       if (d.range && dd < d.range) {
         mvx = mvy = 0;
@@ -2121,7 +2307,7 @@ function updateEnemies(dt) {
         if (e.cd <= 0) {
           e.cd = d.rate;
           if (d.kamikaze) { e.dead = true; aoeHurt(e.x, e.y, 30, d.dmg * e.dmgMul); continue; }
-          if (T === P) { hurtPlayer(d.dmg * e.dmgMul); if (d.chill && !P.inRover) { P.chill = 2; } } else { hurtMod(T, d.dmg * e.dmgMul); SFX.hit(); part(T.x, T.y, '#ffd166', 3, 30, .3); }
+          if (T === P) { hurtPlayer(d.dmg * e.dmgMul); if (d.chill && !P.inRover) { P.chill = 2; } } else if (T.ally) { hurtAlly(T, d.dmg * e.dmgMul); SFX.hit(); } else { hurtMod(T, d.dmg * e.dmgMul); SFX.hit(); part(T.x, T.y, '#ffd166', 3, 30, .3); }
         }
       }
       if (d.boss) bossAI(e, dt, dd);
@@ -2176,6 +2362,7 @@ function updateProjectiles(dt) {
       const sh = shieldFor(b.x, b.y);
       if (sh) { sh.pool = Math.max(0, sh.pool - b.dmg); sh.flash = .2; part(b.x, b.y, '#4cc9f0', 4, 30, .3); dead = true; }
       else if (!P.dead && dist(b.x, b.y, P.x, P.y) < (P.inRover ? 9 : 6)) { hurtPlayer(b.dmg); dead = true; }
+      else if (G.allies.length && (() => { for (const a of G.allies) if (Math.abs(a.x - b.x) < 6 && Math.abs(a.y - b.y) < 6) { hurtAlly(a, b.dmg); return true; } return false; })()) dead = true;
       else { const m = modAt.get(Math.floor(b.x / CELL) + ',' + Math.floor(b.y / CELL)); if (m && !MODS[m.type].walk) { hurtMod(m, b.dmg); part(b.x, b.y, b.col, 4, 30, .3); dead = true; } }
       if (!dead) { const t = W.tiles[(b.y / TS | 0) * MW + (b.x / TS | 0)]; if (t === 1 || t === 2 || t === 4) dead = true; }
     }
@@ -2313,6 +2500,7 @@ function render() {
   // drones
   for (const r of rdrones) { if (!vis(r.x, r.y)) continue; if (r.fixing && r.tgt) { const T = repTargetPos(r.tgt); ctx.strokeStyle = frame % 4 < 2 ? '#80ffaa' : '#d8f3dc'; ctx.beginPath(); ctx.moveTo(r.x + ox, r.y + oy + 3); ctx.lineTo(T.x + ox + rnd(-4, 4), T.y + oy + rnd(-4, 4)); ctx.stroke(); } ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.fillRect(Math.round(r.x + ox - 3), Math.round(r.y + oy + 8), 6, 2); ctx.drawImage(SPR.rdrone, Math.round(r.x + ox - 4), Math.round(r.y + oy - 4 + Math.sin(frame * .2) * 1)); }
   for (const t of tdrones) { if (!vis(t.x, t.y)) continue; ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.fillRect(Math.round(t.x + ox - 3), Math.round(t.y + oy + 8), 6, 2); ctx.drawImage(SPR.tdrone, Math.round(t.x + ox - 4), Math.round(t.y + oy - 4)); if (t.load > 0) { ctx.fillStyle = RN[t.lres] ? RN[t.lres][2] : '#fff'; ctx.fillRect(Math.round(t.x + ox - 2), Math.round(t.y + oy + 3), 4, 3); } }
+  drawAllies(ox, oy, vis);
   // projectiles
   for (const b of bullets) { if (!vis(b.x, b.y, 4)) continue; ctx.fillStyle = b.col; const s = b.s || 2; ctx.fillRect(Math.round(b.x + ox - s / 2), Math.round(b.y + oy - s / 2), s, s); if (b.team !== 'e') { ctx.globalAlpha = .5; ctx.fillRect(Math.round(b.x - b.vx * .012 + ox), Math.round(b.y - b.vy * .012 + oy), 1, 1); ctx.globalAlpha = 1; } }
   for (const s of shells) { const f = s.t / s.T, x = s.x0 + (s.x1 - s.x0) * f, y = s.y0 + (s.y1 - s.y0) * f - Math.sin(f * Math.PI) * 50; ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.fillRect(Math.round(s.x0 + (s.x1 - s.x0) * f + ox - 2), Math.round(s.y0 + (s.y1 - s.y0) * f + oy), 4, 2); ctx.fillStyle = '#343a40'; ctx.fillRect(Math.round(x + ox - 2), Math.round(y + oy - 2), 4, 4); ctx.fillStyle = '#ff9f1c'; ctx.fillRect(Math.round(x + ox - 1), Math.round(y + oy - 1), 2, 2); }
@@ -2494,6 +2682,7 @@ function updateHUD() {
 $('obj').addEventListener('click', () => { if (!paused) openJournal(); });
 $('btnGar').onclick = () => { initAudio(); if (!paused) openGarage(); };
 $('btnJour').onclick = () => { initAudio(); if (!paused) openJournal(); };
+$('btnBots').onclick = () => { initAudio(); if (!paused) openBots(); };
 $('btnMap').onclick = () => { initAudio(); if (!paused) openMap(); };
 
 // ---------- Titre / pause ----------
